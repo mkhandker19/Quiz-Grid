@@ -1,0 +1,26 @@
+{
+  "name": "quiz-grid",
+  "version": "1.0.0",
+  "description": "A quiz application with user authentication, scoring, and leaderboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "quiz",
+    "express",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.3",
+    "bcryptjs": "^2.4.3",
+    "express-session": "^1.17.3",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {}
+}
+

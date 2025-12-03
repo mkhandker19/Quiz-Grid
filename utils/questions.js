@@ -70,21 +70,26 @@ function getQuestionsExcludingUsed(usedQuestionIds = [], count = 10) {
     loadQuestions();
   }
 
-  // Filter out used questions
-  const availableQuestions = questions.filter((_, index) => !usedQuestionIds.includes(index));
+  // Create array of available question indices
+  const availableIndices = questions
+    .map((_, index) => index)
+    .filter(index => !usedQuestionIds.includes(index));
 
-  if (availableQuestions.length === 0) {
+  if (availableIndices.length === 0) {
     // All questions have been used, reset and return random questions
     console.log('All questions have been used, resetting...');
     return getRandomQuestions(count);
   }
 
-  if (count >= availableQuestions.length) {
-    return shuffleArray([...availableQuestions]);
-  }
+  // Shuffle available indices
+  const shuffledIndices = shuffleArray([...availableIndices]);
+  const selectedIndices = shuffledIndices.slice(0, Math.min(count, shuffledIndices.length));
 
-  const shuffled = shuffleArray([...availableQuestions]);
-  return shuffled.slice(0, count);
+  // Return questions with their indices
+  return selectedIndices.map(index => ({
+    ...questions[index],
+    _index: index // Include original index for tracking
+  }));
 }
 
 /**

@@ -5,13 +5,13 @@ const path = require('path');
 const session = require('express-session');
 const connectDB = require('./config/database');
 const User = require('./models/User');
+const { getAllQuestions, getQuestionsExcludingUsed } = require('./utils/questions');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 
 connectDB();
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -21,9 +21,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // Set to true if using HTTPS
+    secure: false, 
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000 
   }
 }));
 
@@ -56,7 +56,7 @@ app.post('/api/signup', async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Basic validation
+    
     if (!username || !email || !password) {
       return res.status(400).json({ 
         success: false, 
@@ -64,7 +64,7 @@ app.post('/api/signup', async (req, res) => {
       });
     }
 
-    // Check if user already exists
+    
     const existingUser = await User.findOne({
       $or: [{ email: email.toLowerCase() }, { username: username.trim() }]
     });
@@ -76,7 +76,7 @@ app.post('/api/signup', async (req, res) => {
       });
     }
 
-    // Create new user (password will be hashed automatically by pre-save hook)
+    
     const user = new User({
       username: username.trim(),
       email: email.toLowerCase().trim(),
@@ -85,7 +85,7 @@ app.post('/api/signup', async (req, res) => {
 
     await user.save();
 
-    // Don't send password back
+    
     const userResponse = {
       id: user._id,
       username: user.username,
@@ -100,7 +100,6 @@ app.post('/api/signup', async (req, res) => {
     });
 
   } catch (error) {
-    // Handle validation errors from Mongoose
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
@@ -109,7 +108,7 @@ app.post('/api/signup', async (req, res) => {
       });
     }
 
-    // Handle duplicate key error
+   
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -117,7 +116,7 @@ app.post('/api/signup', async (req, res) => {
       });
     }
 
-    // Other errors
+    
     console.error('Signup error:', error);
     res.status(500).json({
       success: false,
@@ -216,7 +215,82 @@ app.get('/api/auth/status', requireAuth, (req, res) => {
   });
 });
 
-// Start server
+
+const initializeUsedQuestions = (req) => {
+  if (!req.session.usedQuestionIndices) {
+    req.session.usedQuestionIndices = [];
+  }
+};
+
+
+app.get('/api/quiz/start', requireAuth, (req, res) => {
+  try {
+    initializeUsedQuestions(req);
+
+    const selectedQuestions = getQuestionsExcludingUsed(
+      req.session.usedQuestionIndices,
+      10
+    );
+
+    
+    const selectedIndices = selectedQuestions.map(q => q._index);
+
+   
+    req.session.usedQuestionIndices = [
+      ...req.session.usedQuestionIndices,
+      ...selectedIndices
+    ];
+
+   
+    req.session.currentQuiz = {
+      questions: selectedQuestions.map(q => {
+        const { _index, ...question } = q;
+        return question;
+      }),
+      questionIndices: selectedIndices,
+      answers: {},
+      startTime: new Date()
+    };
+
+    const formattedQuestions = selectedQuestions.map((q, index) => {
+      const { _index, answer, ...questionData } = q;
+      return {
+        questionNumber: index + 1,
+        question: questionData.question,
+        options: {
+          A: questionData.A,
+          B: questionData.B,
+          C: questionData.C,
+          D: questionData.D
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      questions: formattedQuestions,
+      totalQuestions: formattedQuestions.length
+    });
+
+  } catch (error) {
+    console.error('Quiz start error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error starting quiz. Please try again.'
+    });
+  }
+});
+
+
+app.post('/api/quiz/reset', requireAuth, (req, res) => {
+  req.session.usedQuestionIndices = [];
+  req.session.currentQuiz = null;
+  res.json({
+    success: true,
+    message: 'Quiz history reset successfully'
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Visit http://localhost:${PORT} to see the app`);

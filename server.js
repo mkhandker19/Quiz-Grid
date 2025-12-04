@@ -215,6 +215,55 @@ app.get('/api/auth/status', requireAuth, (req, res) => {
   });
 });
 
+app.get('/api/user/profile', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    const totalAttempts = user.quizAttempts.length;
+    const bestScore = user.getBestScore();
+    const averageScore = user.getAverageScore();
+
+    const history = user.quizAttempts
+      .map(attempt => ({
+        score: attempt.score,
+        correctCount: attempt.correctCount,
+        totalQuestions: attempt.totalQuestions,
+        incorrectCount: attempt.incorrectCount,
+        timeTaken: attempt.timeTaken,
+        date: attempt.date
+      }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json({
+      success: true,
+      user: {
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      },
+      stats: {
+        totalQuizzes: totalAttempts,
+        averageScore: averageScore ? parseFloat(averageScore) : null,
+        bestScore: bestScore
+      },
+      history: history
+    });
+
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving profile.'
+    });
+  }
+});
 
 const initializeUsedQuestions = (req) => {
   if (!req.session.usedQuestionIndices) {

@@ -330,7 +330,7 @@ app.post('/api/quiz/answer', requireAuth, (req, res) => {
   }
 });
 
-app.post('/api/quiz/submit', requireAuth, (req, res) => {
+app.post('/api/quiz/submit', requireAuth, async (req, res) => {
   try {
     if (!req.session.currentQuiz) {
       return res.status(400).json({
@@ -388,6 +388,24 @@ app.post('/api/quiz/submit', requireAuth, (req, res) => {
     req.session.quizResults = quizResults;
     req.session.currentQuiz = null;
 
+    try {
+      const user = await User.findById(req.session.userId);
+      if (user) {
+        user.quizAttempts.push({
+          score: score,
+          correctCount: correctCount,
+          totalQuestions: totalQuestions,
+          incorrectCount: totalQuestions - correctCount,
+          timeTaken: timeTaken,
+          date: endTime,
+          questions: results
+        });
+        await user.save();
+      }
+    } catch (saveError) {
+      console.error('Error saving quiz attempt to database:', saveError);
+    }
+
     res.json({
       success: true,
       ...quizResults
@@ -398,6 +416,52 @@ app.post('/api/quiz/submit', requireAuth, (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error submitting quiz. Please try again.'
+    });
+  }
+});
+
+app.post('/api/quiz/save', requireAuth, async (req, res) => {
+  try {
+    if (!req.session.quizResults) {
+      return res.status(400).json({
+        success: false,
+        message: 'No quiz results to save. Please complete a quiz first.'
+      });
+    }
+
+    const quizResults = req.session.quizResults;
+    const user = await User.findById(req.session.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    user.quizAttempts.push({
+      score: quizResults.score,
+      correctCount: quizResults.correctCount,
+      totalQuestions: quizResults.totalQuestions,
+      incorrectCount: quizResults.incorrectCount,
+      timeTaken: quizResults.timeTaken,
+      date: quizResults.submittedAt || new Date(),
+      questions: quizResults.results
+    });
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Quiz attempt saved successfully',
+      attemptId: user.quizAttempts[user.quizAttempts.length - 1]._id
+    });
+
+  } catch (error) {
+    console.error('Quiz save error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error saving quiz attempt. Please try again.'
     });
   }
 });

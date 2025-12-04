@@ -24,23 +24,42 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters long']
   },
-  scores: [{
+  quizAttempts: [{
     score: {
       type: Number,
       required: true,
       min: 0,
-      max: 10
+      max: 100
+    },
+    correctCount: {
+      type: Number,
+      required: true
     },
     totalQuestions: {
       type: Number,
-      default: 10
+      required: true
+    },
+    incorrectCount: {
+      type: Number,
+      required: true
+    },
+    timeTaken: {
+      type: Number,
+      default: 0
     },
     date: {
       type: Date,
       default: Date.now
     },
     questions: [{
+      questionNumber: Number,
       question: String,
+      options: {
+        A: String,
+        B: String,
+        C: String,
+        D: String
+      },
       userAnswer: String,
       correctAnswer: String,
       isCorrect: Boolean
@@ -72,17 +91,19 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to get user's best score
 userSchema.methods.getBestScore = function() {
-  if (this.scores.length === 0) return null;
-  return Math.max(...this.scores.map(score => score.score));
+  if (this.quizAttempts.length === 0) return null;
+  return Math.max(...this.quizAttempts.map(attempt => attempt.score));
 };
 
-// Method to get user's average score
 userSchema.methods.getAverageScore = function() {
-  if (this.scores.length === 0) return 0;
-  const sum = this.scores.reduce((acc, score) => acc + score.score, 0);
-  return (sum / this.scores.length).toFixed(2);
+  if (this.quizAttempts.length === 0) return 0;
+  const sum = this.quizAttempts.reduce((acc, attempt) => acc + attempt.score, 0);
+  return (sum / this.quizAttempts.length).toFixed(2);
+};
+
+userSchema.methods.getTotalAttempts = function() {
+  return this.quizAttempts.length;
 };
 
 const User = mongoose.model('User', userSchema);

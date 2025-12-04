@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - Quiz Grid</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .leaderboard-container {
+            max-width: 800px;
+        }
+
+        .user-rank-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(35, 35, 35, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(50, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .user-rank-label {
+            font-size: 0.9rem;
+            color: #cccccc;
+            margin-bottom: 10px;
+        }
+
+        .user-rank-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #51cf66;
+        }
+
+        .user-rank-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+            gap: 15px;
+        }
+
+        .user-stat-item {
+            text-align: center;
+        }
+
+        .user-stat-label {
+            font-size: 0.85rem;
+            color: #cccccc;
+            margin-bottom: 5px;
+        }
+
+        .user-stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: rgba(20, 20, 20, 0.75);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .leaderboard-table thead {
+            background: rgba(35, 35, 35, 0.8);
+        }
+
+        .leaderboard-table th {
+            padding: 15px;
+            text-align: left;
+            color: #ffffff;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(50, 0, 0, 0.3);
+        }
+
+        .leaderboard-table th:first-child {
+            text-align: center;
+            width: 60px;
+        }
+
+        .leaderboard-table th:nth-child(2) {
+            width: auto;
+        }
+
+        .leaderboard-table th:nth-child(3),
+        .leaderboard-table th:nth-child(4),
+        .leaderboard-table th:nth-child(5) {
+            text-align: center;
+            width: 120px;
+        }
+
+        .leaderboard-table tbody tr {
+            border-bottom: 1px solid rgba(50, 0, 0, 0.2);
+            transition: background-color 0.2s;
+        }
+
+        .leaderboard-table tbody tr:hover {
+            background-color: rgba(35, 35, 35, 0.5);
+        }
+
+        .leaderboard-table tbody tr.current-user {
+            background-color: rgba(81, 207, 102, 0.15);
+            border-left: 4px solid #51cf66;
+        }
+
+        .leaderboard-table td {
+            padding: 15px;
+            color: #ffffff;
+        }
+
+        .rank-cell {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .rank-cell.rank-1 {
+            color: #ffd700;
+        }
+
+        .rank-cell.rank-2 {
+            color: #c0c0c0;
+        }
+
+        .rank-cell.rank-3 {
+            color: #cd7f32;
+        }
+
+        .username-cell {
+            font-weight: 500;
+        }
+
+        .score-cell {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .score-cell.excellent {
+            color: #51cf66;
+        }
+
+        .score-cell.good {
+            color: #ffd43b;
+        }
+
+        .attempts-cell {
+            text-align: center;
+            color: #cccccc;
+        }
+
+        .avg-score-cell {
+            text-align: center;
+            color: #cccccc;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #cccccc;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .action-buttons .btn {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background-color: #3a3a3a;
+            border-color: #4a4a4a;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4a4a4a;
+            border-color: #5a5a5a;
+        }
+
+        @media (max-width: 600px) {
+            .leaderboard-table {
+                font-size: 0.9rem;
+            }
+
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 10px 8px;
+            }
+
+            .leaderboard-table th:nth-child(4),
+            .leaderboard-table th:nth-child(5),
+            .leaderboard-table td:nth-child(4),
+            .leaderboard-table td:nth-child(5) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Quiz Grid</h1>
+    </div>
+
+    <div class="container leaderboard-container">
+        <h2 style="margin-bottom: 20px; text-align: center;">Leaderboard</h2>
+        
+        <div class="user-rank-section" id="userRankSection" style="display: none;">
+            <div class="user-rank-label">Your Rank</div>
+            <div class="user-rank-value" id="userRank">-</div>
+            <div class="user-rank-stats">
+                <div class="user-stat-item">
+                    <div class="user-stat-label">Best Score</div>
+                    <div class="user-stat-value" id="userBestScore">-</div>
+                </div>
+                <div class="user-stat-item">
+                    <div class="user-stat-label">Total Attempts</div>
+                    <div class="user-stat-value" id="userAttempts">-</div>
+                </div>
+                <div class="user-stat-item">
+                    <div class="user-stat-label">Average Score</div>
+                    <div class="user-stat-value" id="userAvgScore">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Top 10 Players</div>
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Username</th>
+                    <th>Best Score</th>
+                    <th>Attempts</th>
+                    <th>Avg Score</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboardTableBody">
+                <tr>
+                    <td colspan="5" class="no-data">Loading leaderboard...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="action-buttons">
+            <button id="homeBtn" class="btn">Back to Home</button>
+            <button id="profileBtn" class="btn btn-secondary">View Profile</button>
+        </div>
+    </div>
+
+    <script src="/js/leaderboard.js"></script>
+</body>
+</html>
+

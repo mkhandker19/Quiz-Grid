@@ -265,6 +265,80 @@ app.get('/api/user/profile', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/leaderboard', requireAuth, async (req, res) => {
+  try {
+    const allUsers = await User.find().select('username quizAttempts');
+    
+    const playersWithScores = allUsers
+      .map(user => {
+        const bestScore = user.getBestScore();
+        const averageScore = user.getAverageScore();
+        const totalAttempts = user.quizAttempts.length;
+        
+        if (totalAttempts === 0) {
+          return null;
+        }
+        
+        return {
+          username: user.username,
+          bestScore: bestScore,
+          averageScore: averageScore ? parseFloat(averageScore) : null,
+          totalAttempts: totalAttempts
+        };
+      })
+      .filter(player => player !== null)
+      .sort((a, b) => {
+        if (b.bestScore === null && a.bestScore === null) return 0;
+        if (b.bestScore === null) return -1;
+        if (a.bestScore === null) return 1;
+        return b.bestScore - a.bestScore;
+      });
+
+    const top10 = playersWithScores.slice(0, 10);
+
+    let currentUserRank = null;
+    let currentUserData = null;
+    
+    if (req.session.userId) {
+      const currentUser = await User.findById(req.session.userId);
+      if (currentUser) {
+        const currentUserBestScore = currentUser.getBestScore();
+        const currentUserAvgScore = currentUser.getAverageScore();
+        const currentUserAttempts = currentUser.quizAttempts.length;
+        
+        currentUserRank = playersWithScores.findIndex(
+          player => player.username === currentUser.username
+        ) + 1;
+        
+        if (currentUserRank === 0) {
+          currentUserRank = null;
+        }
+        
+        currentUserData = {
+          username: currentUser.username,
+          rank: currentUserRank,
+          bestScore: currentUserBestScore,
+          averageScore: currentUserAvgScore ? parseFloat(currentUserAvgScore) : null,
+          totalAttempts: currentUserAttempts
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      leaderboard: top10,
+      currentUser: currentUserData
+    });
+
+  } catch (error) {
+    console.error('Leaderboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving leaderboard.'
+    });
+  }
+});
+
 const initializeUsedQuestions = (req) => {
   if (!req.session.usedQuestionIndices) {
     req.session.usedQuestionIndices = [];

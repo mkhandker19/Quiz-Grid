@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Results - Quiz Grid</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .results-container {
+            max-width: 700px;
+        }
+
+        .score-display {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(35, 35, 35, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(50, 0, 0, 0.3);
+        }
+
+        .score-number {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .score-percentage {
+            font-size: 2rem;
+            color: #cccccc;
+            margin-bottom: 15px;
+        }
+
+        .score-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(35, 35, 35, 0.3);
+            border-radius: 4px;
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #cccccc;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .stat-value.correct {
+            color: #51cf66;
+        }
+
+        .stat-value.incorrect {
+            color: #ff6b6b;
+        }
+
+        .results-list {
+            margin-top: 30px;
+        }
+
+        .result-item {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: rgba(35, 35, 35, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(50, 0, 0, 0.3);
+        }
+
+        .result-item.correct {
+            border-left: 4px solid #51cf66;
+        }
+
+        .result-item.incorrect {
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .result-question {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .result-options {
+            margin-bottom: 15px;
+        }
+
+        .result-option {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            background: rgba(20, 20, 20, 0.5);
+            border: 1px solid rgba(50, 0, 0, 0.2);
+        }
+
+        .result-option.user-answer {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: #ff6b6b;
+        }
+
+        .result-option.correct-answer {
+            background: rgba(81, 207, 102, 0.2);
+            border-color: #51cf66;
+        }
+
+        .result-option.user-answer.correct-answer {
+            background: rgba(81, 207, 102, 0.3);
+            border-color: #51cf66;
+        }
+
+        .result-answer-label {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .result-status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .result-status.correct {
+            background: rgba(81, 207, 102, 0.2);
+            color: #51cf66;
+        }
+
+        .result-status.incorrect {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .action-buttons .btn {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Quiz Grid</h1>
+    </div>
+
+    <div class="container results-container">
+        <h2 style="margin-bottom: 20px; text-align: center;">Quiz Results</h2>
+        
+        <div class="score-display" id="scoreDisplay">
+            <div class="score-percentage" id="scorePercentage">Loading...</div>
+            <div class="score-number" id="scoreNumber">-</div>
+            <div class="score-stats">
+                <div class="stat-item">
+                    <div class="stat-label">Correct</div>
+                    <div class="stat-value correct" id="correctCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Incorrect</div>
+                    <div class="stat-value incorrect" id="incorrectCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total</div>
+                    <div class="stat-value" id="totalCount">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-list" id="resultsList">
+        </div>
+
+        <div class="action-buttons">
+            <button id="homeBtn" class="btn">Back to Home</button>
+            <button id="retakeBtn" class="btn btn-secondary">Retake Quiz</button>
+        </div>
+    </div>
+
+    <script src="/js/results.js"></script>
+</body>
+</html>
+

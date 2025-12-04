@@ -330,9 +330,105 @@ app.post('/api/quiz/answer', requireAuth, (req, res) => {
   }
 });
 
+app.post('/api/quiz/submit', requireAuth, (req, res) => {
+  try {
+    if (!req.session.currentQuiz) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active quiz session. Please start a quiz first.'
+      });
+    }
+
+    const quiz = req.session.currentQuiz;
+    const userAnswers = quiz.answers;
+    const questions = quiz.questions;
+    
+    let correctCount = 0;
+    let totalQuestions = questions.length;
+    const results = [];
+
+    questions.forEach((question, index) => {
+      const userAnswer = userAnswers[index];
+      const correctAnswer = question.answer;
+      const isCorrect = userAnswer === correctAnswer;
+      
+      if (isCorrect) {
+        correctCount++;
+      }
+
+      results.push({
+        questionNumber: index + 1,
+        question: question.question,
+        options: {
+          A: question.A,
+          B: question.B,
+          C: question.C,
+          D: question.D
+        },
+        userAnswer: userAnswer || null,
+        correctAnswer: correctAnswer,
+        isCorrect: isCorrect
+      });
+    });
+
+    const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    const endTime = new Date();
+    const timeTaken = Math.round((endTime - new Date(quiz.startTime)) / 1000);
+
+    const quizResults = {
+      score: score,
+      correctCount: correctCount,
+      totalQuestions: totalQuestions,
+      incorrectCount: totalQuestions - correctCount,
+      timeTaken: timeTaken,
+      results: results,
+      submittedAt: endTime
+    };
+
+    req.session.quizResults = quizResults;
+    req.session.currentQuiz = null;
+
+    res.json({
+      success: true,
+      ...quizResults
+    });
+
+  } catch (error) {
+    console.error('Quiz submit error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error submitting quiz. Please try again.'
+    });
+  }
+});
+
+app.get('/api/quiz/results', requireAuth, (req, res) => {
+  try {
+    if (!req.session.quizResults) {
+      return res.status(404).json({
+        success: false,
+        message: 'No quiz results found. Please complete a quiz first.'
+      });
+    }
+
+    res.json({
+      success: true,
+      ...req.session.quizResults
+    });
+
+  } catch (error) {
+    console.error('Quiz results error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving quiz results.'
+    });
+  }
+});
+
 app.post('/api/quiz/reset', requireAuth, (req, res) => {
   req.session.usedQuestionIndices = [];
   req.session.currentQuiz = null;
+  req.session.quizResults = null;
   res.json({
     success: true,
     message: 'Quiz history reset successfully'

@@ -249,6 +249,7 @@ app.get('/api/quiz/start', requireAuth, (req, res) => {
       }),
       questionIndices: selectedIndices,
       answers: {},
+      currentQuestionIndex: 0,
       startTime: new Date()
     };
 
@@ -281,6 +282,53 @@ app.get('/api/quiz/start', requireAuth, (req, res) => {
   }
 });
 
+
+app.post('/api/quiz/answer', requireAuth, (req, res) => {
+  try {
+    if (!req.session.currentQuiz) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active quiz session. Please start a quiz first.'
+      });
+    }
+
+    const { questionIndex, answer } = req.body;
+
+    if (questionIndex === undefined || answer === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide questionIndex and answer'
+      });
+    }
+
+    const quiz = req.session.currentQuiz;
+    const totalQuestions = quiz.questions.length;
+
+    if (questionIndex < 0 || questionIndex >= totalQuestions) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid question index. Must be between 0 and ${totalQuestions - 1}`
+      });
+    }
+
+    quiz.answers[questionIndex] = answer;
+    quiz.currentQuestionIndex = questionIndex;
+
+    res.json({
+      success: true,
+      message: 'Answer saved successfully',
+      currentQuestionIndex: quiz.currentQuestionIndex,
+      totalQuestions: totalQuestions
+    });
+
+  } catch (error) {
+    console.error('Quiz answer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error saving answer. Please try again.'
+    });
+  }
+});
 
 app.post('/api/quiz/reset', requireAuth, (req, res) => {
   req.session.usedQuestionIndices = [];

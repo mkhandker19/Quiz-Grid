@@ -37,7 +37,11 @@
     </div>
 
     <script src="/js/navbar.js"></script>
+    <script src="/js/validation.js"></script>
     <script>
+        const validator = new FormValidator();
+        const errorContainer = document.getElementById('errorMessage');
+        
         // Check if user is already authenticated
         async function checkAuth() {
             try {
@@ -57,6 +61,7 @@
         const togglePassword = document.getElementById('togglePassword');
         const passwordInput = document.getElementById('password');
         const eyeIcon = document.getElementById('eyeIcon');
+        const emailInput = document.getElementById('email');
 
         togglePassword.addEventListener('click', () => {
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
@@ -69,15 +74,78 @@
             }
         });
 
+        // Real-time validation
+        emailInput.addEventListener('blur', () => {
+            const value = emailInput.value.trim();
+            if (value) {
+                const validation = validator.validateField('email', value);
+                if (!validation.valid) {
+                    validator.showFieldError(emailInput, validation.errors[0]);
+                } else {
+                    validator.clearFieldError(emailInput);
+                }
+            }
+        });
+
+        passwordInput.addEventListener('blur', () => {
+            const value = passwordInput.value;
+            if (value) {
+                const validation = validator.validateField('password', value);
+                if (!validation.valid) {
+                    validator.showFieldError(passwordInput, validation.errors[0]);
+                } else {
+                    validator.clearFieldError(passwordInput);
+                }
+            }
+        });
+
+        // Clear errors on input
+        emailInput.addEventListener('input', () => {
+            validator.clearFieldError(emailInput);
+            validator.clearFormError(errorContainer.parentElement);
+        });
+
+        passwordInput.addEventListener('input', () => {
+            validator.clearFieldError(passwordInput);
+            validator.clearFormError(errorContainer.parentElement);
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const errorMessage = document.getElementById('errorMessage');
-            errorMessage.style.display = 'none';
-            errorMessage.textContent = '';
+            // Clear previous errors
+            validator.clearFormError(errorContainer.parentElement);
+            validator.clearFieldError(emailInput);
+            validator.clearFieldError(passwordInput);
             
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            
+            // Client-side validation
+            const emailValidation = validator.validateField('email', email);
+            const passwordValidation = validator.validateField('password', password);
+            
+            let hasErrors = false;
+            
+            if (!email) {
+                validator.showFieldError(emailInput, 'Email or username is required');
+                hasErrors = true;
+            } else if (!emailValidation.valid) {
+                validator.showFieldError(emailInput, emailValidation.errors[0]);
+                hasErrors = true;
+            }
+            
+            if (!password) {
+                validator.showFieldError(passwordInput, 'Password is required');
+                hasErrors = true;
+            } else if (!passwordValidation.valid) {
+                validator.showFieldError(passwordInput, passwordValidation.errors[0]);
+                hasErrors = true;
+            }
+            
+            if (hasErrors) {
+                return;
+            }
             
             const submitBtn = e.target.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
@@ -98,13 +166,13 @@
                 if (data.success) {
                     window.location.href = '/index.html';
                 } else {
-                    errorMessage.textContent = data.message || 'Login failed. Please try again.';
-                    errorMessage.style.display = 'block';
+                    const errorMsg = validator.showFormError(errorContainer.parentElement, data.message || 'Login failed. Please check your credentials and try again.');
+                    errorMsg.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorMessage.textContent = 'An error occurred. Please try again.';
-                errorMessage.style.display = 'block';
+                const errorMsg = validator.showFormError(errorContainer.parentElement, 'Unable to connect to server. Please check your internet connection and try again.');
+                errorMsg.style.display = 'block';
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;

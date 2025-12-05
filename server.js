@@ -30,6 +30,105 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Error handling middleware
+const errorHandler = (err, req, res, next) => {
+  console.error('Error:', err);
+
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors).map(e => e.message);
+    return res.status(400).json({
+      success: false,
+      message: messages.join(', '),
+      errors: messages
+    });
+  }
+
+  // Mongoose duplicate key error
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern)[0];
+    return res.status(400).json({
+      success: false,
+      message: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists. Please choose a different one.`
+    });
+  }
+
+  // Mongoose cast error (invalid ObjectId)
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid ID format.'
+    });
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token. Please login again.'
+    });
+  }
+
+  // Default server error
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'An unexpected error occurred. Please try again later.',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+};
+
+// 404 handler for API routes
+const notFoundHandler = (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      message: 'API endpoint not found.'
+    });
+  }
+  next();
+};
+
+// Request validation middleware
+const validateRequest = (fields) => {
+  return (req, res, next) => {
+    const missingFields = [];
+    const invalidFields = [];
+
+    fields.forEach(field => {
+      const value = req.body[field.name];
+      
+      if (field.required && (!value || (typeof value === 'string' && !value.trim()))) {
+        missingFields.push(field.name);
+      } else if (value && field.type && typeof value !== field.type) {
+        invalidFields.push(field.name);
+      } else if (value && field.minLength && value.length < field.minLength) {
+        invalidFields.push(`${field.name} must be at least ${field.minLength} characters`);
+      } else if (value && field.maxLength && value.length > field.maxLength) {
+        invalidFields.push(`${field.name} must be no more than ${field.maxLength} characters`);
+      } else if (value && field.pattern && !field.pattern.test(value)) {
+        invalidFields.push(`${field.name} format is invalid`);
+      }
+    });
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${missingFields.join(', ')}`,
+        missingFields
+      });
+    }
+
+    if (invalidFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid fields: ${invalidFields.join(', ')}`,
+        invalidFields
+      });
+    }
+
+    next();
+  };
+};
 
 const requireAuth = (req, res, next) => {
   if (req.session && req.session.userId) {
@@ -104,17 +203,13 @@ app.get('/api/test', (req, res) => {
 });
 
 
-app.post('/api/signup', async (req, res) => {
+app.post('/api/signup', validateRequest([
+  { name: 'username', required: true, type: 'string', minLength: 3, maxLength: 30 },
+  { name: 'email', required: true, type: 'string', pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+  { name: 'password', required: true, type: 'string', minLength: 6, maxLength: 100 }
+]), async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
-
-    
-    if (!username || !email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide username, email, and password' 
-      });
-    }
 
     
     const existingUser = await User.findOne({
@@ -122,10 +217,18 @@ app.post('/api/signup', async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username or email already exists' 
-      });
+      if (existingUser.email === email.toLowerCase()) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'An account with this email already exists. Please use a different email or try logging in.' 
+        });
+      }
+      if (existingUser.username === username.trim()) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'This username is already taken. Please choose a different username.' 
+        });
+      }
     }
 
     
@@ -152,42 +255,17 @@ app.post('/api/signup', async (req, res) => {
     });
 
   } catch (error) {
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: messages.join(', ')
-      });
-    }
-
-   
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username or email already exists'
-      });
-    }
-
-    
-    console.error('Signup error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error. Please try again later.'
-    });
+    next(error);
   }
 });
 
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', validateRequest([
+  { name: 'email', required: true, type: 'string' },
+  { name: 'password', required: true, type: 'string', minLength: 1 }
+]), async (req, res, next) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide email/username and password'
-      });
-    }
 
     const user = await User.findOne({
       $or: [
@@ -229,11 +307,7 @@ app.post('/api/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error. Please try again later.'
-    });
+    next(error);
   }
 });
 
@@ -267,7 +341,7 @@ app.get('/api/auth/status', requireAuth, (req, res) => {
   });
 });
 
-app.get('/api/user/profile', requireAuth, async (req, res) => {
+app.get('/api/user/profile', requireAuth, async (req, res, next) => {
   try {
     const user = await User.findById(req.session.userId).select('-password');
     
@@ -309,15 +383,11 @@ app.get('/api/user/profile', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error retrieving profile.'
-    });
+    next(error);
   }
 });
 
-app.get('/api/leaderboard', requireAuth, async (req, res) => {
+app.get('/api/leaderboard', requireAuth, async (req, res, next) => {
   try {
     const allUsers = await User.find().select('username quizAttempts');
     
@@ -383,11 +453,7 @@ app.get('/api/leaderboard', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Leaderboard error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error retrieving leaderboard.'
-    });
+    next(error);
   }
 });
 
@@ -398,7 +464,7 @@ const initializeUsedQuestions = (req) => {
 };
 
 
-app.get('/api/quiz/start', requireAuth, (req, res) => {
+app.get('/api/quiz/start', requireAuth, (req, res, next) => {
   try {
     initializeUsedQuestions(req);
 
@@ -449,16 +515,12 @@ app.get('/api/quiz/start', requireAuth, (req, res) => {
     });
 
   } catch (error) {
-    console.error('Quiz start error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error starting quiz. Please try again.'
-    });
+    next(error);
   }
 });
 
 
-app.post('/api/quiz/answer', requireAuth, (req, res) => {
+app.post('/api/quiz/answer', requireAuth, (req, res, next) => {
   try {
     if (!req.session.currentQuiz) {
       return res.status(400).json({
@@ -497,15 +559,11 @@ app.post('/api/quiz/answer', requireAuth, (req, res) => {
     });
 
   } catch (error) {
-    console.error('Quiz answer error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error saving answer. Please try again.'
-    });
+    next(error);
   }
 });
 
-app.post('/api/quiz/submit', requireAuth, async (req, res) => {
+app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
   try {
     if (!req.session.currentQuiz) {
       return res.status(400).json({
@@ -587,15 +645,11 @@ app.post('/api/quiz/submit', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Quiz submit error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error submitting quiz. Please try again.'
-    });
+    next(error);
   }
 });
 
-app.post('/api/quiz/save', requireAuth, async (req, res) => {
+app.post('/api/quiz/save', requireAuth, async (req, res, next) => {
   try {
     if (!req.session.quizResults) {
       return res.status(400).json({
@@ -633,15 +687,11 @@ app.post('/api/quiz/save', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Quiz save error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error saving quiz attempt. Please try again.'
-    });
+    next(error);
   }
 });
 
-app.get('/api/quiz/results', requireAuth, (req, res) => {
+app.get('/api/quiz/results', requireAuth, (req, res, next) => {
   try {
     if (!req.session.quizResults) {
       return res.status(404).json({
@@ -656,11 +706,7 @@ app.get('/api/quiz/results', requireAuth, (req, res) => {
     });
 
   } catch (error) {
-    console.error('Quiz results error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error retrieving quiz results.'
-    });
+    next(error);
   }
 });
 
@@ -673,6 +719,12 @@ app.post('/api/quiz/reset', requireAuth, (req, res) => {
     message: 'Quiz history reset successfully'
   });
 });
+
+// Apply 404 handler before error handler
+app.use(notFoundHandler);
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

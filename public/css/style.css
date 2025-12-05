@@ -177,9 +177,18 @@ body::before {
     padding: 30px;
     background: rgba(20, 20, 20, 0.75);
     backdrop-filter: blur(10px);
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid rgba(50, 0, 0, 0.2);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.4s ease-out;
+}
+
+/* Container variants for different pages */
+.container.quiz-container,
+.container.results-container,
+.container.profile-container,
+.container.leaderboard-container {
+    max-width: 800px;
 }
 
 /* Form Styles */
@@ -295,13 +304,213 @@ a:hover {
 .error-message {
     color: #ff6b6b;
     font-size: 0.9rem;
-    margin-top: 5px;
+    margin-top: 10px;
+    padding: 12px;
+    background-color: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 4px;
+    display: block;
+    animation: slideDown 0.3s ease-out;
 }
 
 /* Success Messages */
 .success-message {
     color: #51cf66;
     font-size: 0.9rem;
+    margin-top: 10px;
+    padding: 12px;
+    background-color: rgba(81, 207, 102, 0.1);
+    border: 1px solid rgba(81, 207, 102, 0.3);
+    border-radius: 4px;
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+/* Field Error Messages */
+.field-error {
+    color: #ff6b6b;
+    font-size: 0.85rem;
     margin-top: 5px;
+    display: block;
+    animation: slideDown 0.2s ease-out;
+}
+
+/* Input Error State */
+.form-group input.input-error {
+    border-color: #ff6b6b;
+    background-color: rgba(255, 107, 107, 0.05);
+    box-shadow: 0 0 8px rgba(255, 107, 107, 0.2);
+}
+
+.form-group input.input-error:focus {
+    border-color: #ff6b6b;
+    box-shadow: 0 0 12px rgba(255, 107, 107, 0.3);
+}
+
+/* Animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Loading States */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn:disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Enhanced Container Responsive */
+@media (max-width: 768px) {
+    .container {
+        margin: 20px auto;
+        padding: 20px;
+        max-width: 95%;
+    }
+
+    .navbar-brand {
+        font-size: 1.3rem;
+    }
+
+    .nav-link {
+        font-size: 0.9rem;
+        padding: 6px 10px;
+    }
+
+    .btn-logout {
+        font-size: 0.85rem;
+        padding: 6px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        margin: 15px auto;
+        padding: 15px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group input {
+        padding: 10px;
+        font-size: 0.95rem;
+    }
+
+    .btn {
+        padding: 10px;
+        font-size: 0.95rem;
+    }
+
+    .navbar {
+        padding: 12px 15px;
+    }
+
+    .navbar-brand {
+        font-size: 1.2rem;
+    }
+
+    .user-info {
+        font-size: 0.85rem;
+    }
+}
+
+/* Enhanced Focus States */
+input:focus,
+button:focus,
+a:focus {
+    outline: 2px solid rgba(81, 207, 102, 0.5);
+    outline-offset: 2px;
+}
+
+/* Smooth Transitions */
+* {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Better Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(20, 20, 20, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(60, 60, 60, 0.8);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(80, 80, 80, 0.9);
+}
+
+/* Enhanced Link Hover */
+a {
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+a:hover {
+    color: #51cf66;
+}
+
+/* Improved Button States */
+.btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+/* Consistent Color Variables (for future use) */
+:root {
+    --primary-bg: rgba(20, 20, 20, 0.85);
+    --secondary-bg: rgba(35, 35, 35, 0.9);
+    --border-color: rgba(50, 0, 0, 0.3);
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+    --text-muted: #888888;
+    --error-color: #ff6b6b;
+    --success-color: #51cf66;
+    --warning-color: #ffd43b;
+    --hover-bg: rgba(35, 35, 35, 0.5);
 }
 

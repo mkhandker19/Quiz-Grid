@@ -3,7 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const MongoStoreModule = require('connect-mongo');
+const MongoStore = MongoStoreModule.default || MongoStoreModule.MongoStore || MongoStoreModule;
 const mongoose = require('mongoose');
 const connectDB = require('./config/database');
 const User = require('./models/User');
@@ -31,15 +32,13 @@ const ensureDBConnection = async (req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const sessionStore = MongoStore.create({
-  mongoUrl: process.env.MONGODB_URI,
-  touchAfter: 24 * 3600,
-  ttl: 24 * 60 * 60,
-});
-
 app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
-  store: sessionStore,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    touchAfter: 24 * 3600,
+    ttl: 24 * 60 * 60,
+  }),
   resave: false,
   saveUninitialized: false,
   cookie: {

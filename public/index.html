@@ -7,9 +7,7 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="header">
-        <h1>Quiz Grid</h1>
-    </div>
+    <div id="navbar-container"></div>
 
     <div class="container">
         <h2 style="margin-bottom: 20px; text-align: center;">Welcome to Quiz Grid</h2>
@@ -18,49 +16,13 @@
         </p>
         
         <button id="startQuizBtn" class="btn">Start Quiz</button>
-
-        <div id="userInfo" style="text-align: center; margin-top: 20px; color: #cccccc; display: none;">
-            <p style="margin-bottom: 10px;">Logged in as: <span id="usernameDisplay"></span></p>
-            <button id="logoutBtn" class="btn" style="margin-top: 15px; max-width: 200px; background-color: #3a3a3a;">Logout</button>
-        </div>
     </div>
 
+    <script src="/js/navbar.js"></script>
     <script>
-        async function checkAuth() {
-            try {
-                const response = await fetch('/api/auth/status');
-                const data = await response.json();
-
-                if (data.success && data.authenticated) {
-                    document.getElementById('usernameDisplay').textContent = data.user.username;
-                    document.getElementById('userInfo').style.display = 'block';
-                    
-                    document.getElementById('logoutBtn').addEventListener('click', async () => {
-                        try {
-                            const response = await fetch('/api/logout', { method: 'POST' });
-                            const result = await response.json();
-                            if (result.success) {
-                                window.location.href = '/login.html';
-                            }
-                        } catch (error) {
-                            console.error('Logout error:', error);
-                            window.location.href = '/login.html';
-                        }
-                    });
-                } else {
-                    window.location.href = '/login.html';
-                }
-            } catch (error) {
-                console.error('Auth check error:', error);
-                window.location.href = '/login.html';
-            }
-        }
-
         document.getElementById('startQuizBtn').addEventListener('click', () => {
             window.location.href = '/quiz.html';
         });
-
-        checkAuth();
     </script>
 </body>
 </html>

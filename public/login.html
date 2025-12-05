@@ -7,9 +7,7 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="header">
-        <h1>Quiz Grid</h1>
-    </div>
+    <div id="navbar-container"></div>
 
     <div class="container">
         <h2 style="margin-bottom: 20px; text-align: center;">Login</h2>
@@ -38,7 +36,24 @@
         </p>
     </div>
 
+    <script src="/js/navbar.js"></script>
     <script>
+        // Check if user is already authenticated
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/status');
+                const data = await response.json();
+                
+                if (data.success && data.authenticated) {
+                    window.location.href = '/index.html';
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+            }
+        }
+        
+        checkAuth();
+
         const togglePassword = document.getElementById('togglePassword');
         const passwordInput = document.getElementById('password');
         const eyeIcon = document.getElementById('eyeIcon');

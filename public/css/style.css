@@ -49,6 +49,126 @@ body::before {
     font-weight: bold;
 }
 
+/* Navigation Bar */
+.navbar {
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(10px);
+    padding: 15px 20px;
+    border-bottom: 2px solid rgba(60, 0, 0, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.navbar-brand a {
+    color: #ffffff;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.navbar-brand a:hover {
+    color: #cccccc;
+    text-decoration: none;
+}
+
+.navbar-menu {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.navbar-links {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.nav-link {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 1rem;
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+.nav-link:hover {
+    background-color: rgba(35, 35, 35, 0.5);
+    color: #cccccc;
+    text-decoration: none;
+}
+
+.navbar-user {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.user-info {
+    color: #cccccc;
+    font-size: 0.95rem;
+}
+
+.user-info strong {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.btn-logout {
+    padding: 8px 16px;
+    background-color: #3a3a3a;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+}
+
+.btn-logout:hover {
+    background-color: #4a4a4a;
+    border-color: #5a5a5a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-logout:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .navbar-menu {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .navbar-links {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .navbar-user {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
 /* Container */
 .container {
     max-width: 500px;

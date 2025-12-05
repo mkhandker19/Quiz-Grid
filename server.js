@@ -42,8 +42,60 @@ const requireAuth = (req, res, next) => {
   }
 };
 
+// Middleware to redirect authenticated users away from login/signup
+const redirectIfAuthenticated = (req, res, next) => {
+  if (req.session && req.session.userId) {
+    return res.redirect('/index.html');
+  }
+  next();
+};
+
+// Middleware to redirect unauthenticated users to login
+const redirectIfNotAuthenticated = (req, res, next) => {
+  if (req.session && req.session.userId) {
+    next();
+  } else {
+    return res.redirect('/login.html');
+  }
+};
+
+// Root route
 app.get('/', (req, res) => {
+  if (req.session && req.session.userId) {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } else {
+    res.redirect('/login.html');
+  }
+});
+
+// Protected routes - redirect to login if not authenticated
+app.get('/index.html', redirectIfNotAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/quiz.html', redirectIfNotAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'quiz.html'));
+});
+
+app.get('/results.html', redirectIfNotAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'results.html'));
+});
+
+app.get('/profile.html', redirectIfNotAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'profile.html'));
+});
+
+app.get('/leaderboard.html', redirectIfNotAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'leaderboard.html'));
+});
+
+// Public routes - redirect to home if authenticated
+app.get('/login.html', redirectIfAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/signup.html', redirectIfAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'signup.html'));
 });
 
 

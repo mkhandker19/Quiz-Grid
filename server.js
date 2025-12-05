@@ -3,32 +3,54 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const mongoose = require('mongoose');
 const connectDB = require('./config/database');
 const User = require('./models/User');
 const { getAllQuestions, getQuestionsExcludingUsed } = require('./utils/questions');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
-connectDB();
+let dbConnectionPromise = null;
+const ensureDBConnection = async (req, res, next) => {
+  try {
+    if (!dbConnectionPromise) {
+      dbConnectionPromise = connectDB();
+    }
+    await dbConnectionPromise;
+    next();
+  } catch (error) {
+    console.error('Database connection error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database connection failed. Please try again later.'
+    });
+  }
+};
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const sessionStore = MongoStore.create({
+  mongoUrl: process.env.MONGODB_URI,
+  touchAfter: 24 * 3600,
+  ttl: 24 * 60 * 60,
+});
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
+  store: sessionStore,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, 
+    secure: process.env.NODE_ENV === 'production', 
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' 
   }
 }));
 
-
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.resolve(__dirname, 'public')));
 
 // Error handling middleware
 const errorHandler = (err, req, res, next) => {
@@ -161,42 +183,41 @@ const redirectIfNotAuthenticated = (req, res, next) => {
 // Root route
 app.get('/', (req, res) => {
   if (req.session && req.session.userId) {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
   } else {
     res.redirect('/login.html');
   }
 });
 
-// Protected routes - redirect to login if not authenticated
 app.get('/index.html', redirectIfNotAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
 });
 
 app.get('/quiz.html', redirectIfNotAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'quiz.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'quiz.html'));
 });
 
 app.get('/results.html', redirectIfNotAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'results.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'results.html'));
 });
 
 app.get('/profile.html', redirectIfNotAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'profile.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'profile.html'));
 });
 
 app.get('/leaderboard.html', redirectIfNotAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'leaderboard.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'leaderboard.html'));
 });
 
-// Public routes - redirect to home if authenticated
 app.get('/login.html', redirectIfAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'login.html'));
 });
 
 app.get('/signup.html', redirectIfAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'signup.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'signup.html'));
 });
 
+app.use('/api', ensureDBConnection);
 
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Server is running!' });
@@ -720,14 +741,15 @@ app.post('/api/quiz/reset', requireAuth, (req, res) => {
   });
 });
 
-// Apply 404 handler before error handler
 app.use(notFoundHandler);
-
-// Error handling middleware (must be last)
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Visit http://localhost:${PORT} to see the app`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Visit http://localhost:${PORT} to see the app`);
+  });
+}
+
+module.exports = app;
 

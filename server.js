@@ -359,6 +359,40 @@ const requireAuth = async (req, res, next) => {
         email: decoded.email
       };
       req.authMethod = 'jwt';
+      
+      // CRITICAL: Populate session with userId even when using JWT auth
+      // This ensures the session is properly associated with the user
+      // Without this, session-based features (like quiz state) won't work
+      if (req.session) {
+        // Only update if not already set or if different (avoid unnecessary saves)
+        if (!req.session.userId || req.session.userId !== decoded.id) {
+          req.session.userId = decoded.id;
+          req.session.username = decoded.username;
+          req.session.email = decoded.email;
+          
+          // Save session to ensure userId is persisted
+          // This is important for session-based features like quiz state
+          try {
+            await new Promise((resolve) => {
+              req.session.save((err) => {
+                if (err) {
+                  // Log but don't fail - JWT auth still works
+                  if (isProduction) {
+                    console.warn('Failed to save userId to session (non-critical):', err.message);
+                  }
+                }
+                resolve();
+              });
+            });
+          } catch (saveError) {
+            // Non-fatal - continue with JWT auth
+            if (isProduction) {
+              console.warn('Session save error in requireAuth (non-critical):', saveError.message);
+            }
+          }
+        }
+      }
+      
       return next();
     }
   }
@@ -771,6 +805,22 @@ app.get('/api/quiz/categories', requireAuth, async (req, res, next) => {
 
 app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
   try {
+    // Ensure session has userId (should be set by requireAuth, but double-check)
+    if (req.session && !req.session.userId && req.user) {
+      req.session.userId = req.user.id;
+      req.session.username = req.user.username;
+      req.session.email = req.user.email;
+      // Save session to ensure userId is persisted
+      await new Promise((resolve) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving userId to session in quiz/start:', err);
+          }
+          resolve();
+        });
+      });
+    }
+    
     // Clear any existing quiz session to ensure fresh questions are fetched
     req.session.currentQuiz = null;
     initializeUsedQuestions(req);

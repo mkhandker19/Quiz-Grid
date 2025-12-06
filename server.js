@@ -427,6 +427,11 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/auth/status', requireAuth, (req, res) => {
+  // Set headers to prevent caching and ensure cookies are sent
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
   res.json({
     success: true,
     authenticated: true,

@@ -61,30 +61,54 @@
 
     <script src="/js/navbar.js"></script>
     <script>
-        // Check authentication immediately when page loads
+        // Check authentication with retry logic to handle cookie timing issues
+        // This is especially important in serverless environments where cookies may take time to be available
         (async function checkAuthOnLoad() {
-            try {
-                const response = await fetch('/api/auth/status', {
-                    credentials: 'include'
-                });
-                
-                if (response.status === 401) {
-                    // Not authenticated - redirect to login immediately
-                    window.location.href = '/login.html';
-                    return;
+            const maxRetries = 3;
+            const retryDelay = 300; // 300ms between retries
+            
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    // Add delay on retries to give cookie time to be available
+                    if (attempt > 0) {
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    }
+                    
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'include',
+                        cache: 'no-store' // Prevent caching of auth status
+                    });
+                    
+                    if (response.status === 401) {
+                        // If this is the last attempt, redirect to login
+                        if (attempt === maxRetries - 1) {
+                            window.location.href = '/login.html';
+                            return;
+                        }
+                        // Otherwise, retry
+                        continue;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.authenticated) {
+                        // Authentication successful, stop checking
+                        return;
+                    }
+                    
+                    // If this is the last attempt, redirect to login
+                    if (attempt === maxRetries - 1) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                } catch (error) {
+                    console.error(`Auth check error (attempt ${attempt + 1}):`, error);
+                    // If this is the last attempt, redirect to login
+                    if (attempt === maxRetries - 1) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
                 }
-                
-                const data = await response.json();
-                
-                if (!data.success || !data.authenticated) {
-                    // Not authenticated - redirect to login immediately
-                    window.location.href = '/login.html';
-                    return;
-                }
-            } catch (error) {
-                console.error('Auth check error:', error);
-                // On error, redirect to login to be safe
-                window.location.href = '/login.html';
             }
         })();
 

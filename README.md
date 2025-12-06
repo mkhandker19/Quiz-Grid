@@ -110,19 +110,24 @@ This application is deployed on **Render**.
 ## Screenshots
 
 ### Landing Page
+Animated landing page to introduce the Quiz site.
 <img width="1919" height="945" alt="{37B62E0A-BD81-41A8-BE57-D65D3937BB0A}" src="https://github.com/user-attachments/assets/b6ea383d-533f-4dfe-94eb-962e24aea649" />
 
 ### Home Page
 Customize your quiz with category selection and question count.
+<img width="1914" height="946" alt="{CE4FDDF2-8C19-4516-BFBF-912ECF7E37C7}" src="https://github.com/user-attachments/assets/2b05c611-61e4-4f17-81a8-8f0d05cba287" />
 
 ### Quiz Interface
 Answer questions with a clean, distraction-free interface.
+<img width="1920" height="945" alt="{5DE9661F-4608-4995-8641-5EBCE2311F68}" src="https://github.com/user-attachments/assets/8cf540bf-8176-4e16-bba1-a428d8953903" />
 
 ### Results Page
 View detailed results with correct answers highlighted.
+<img width="1918" height="941" alt="{64E51D16-DEB5-42FA-B688-848D2C26D33A}" src="https://github.com/user-attachments/assets/bf8cd03e-c7bf-48f5-8402-49765c05783d" />
 
 ### Leaderboard
 Compete with other players for the top spot.
+<img width="1921" height="948" alt="{6A6F6997-E81A-4F86-9A35-6B747E5EC047}" src="https://github.com/user-attachments/assets/54323205-5c6f-4cd4-9b37-9ef5ed8e6e80" />
 
 ## License
 

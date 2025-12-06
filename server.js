@@ -33,7 +33,7 @@ const ensureDBConnection = async (req, res, next) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // Required to parse JWT cookies
+app.use(cookieParser()); // Required to parse JWT cookies - MUST be before session middleware
 
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
@@ -148,24 +148,41 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
   store: sessionStore,
   resave: true, // Force save even if session wasn't modified - important for MongoDB store
-  saveUninitialized: false, // Don't save uninitialized sessions
-    cookie: {
-      secure: isProduction, // false for local (HTTP), true for production (HTTPS)
-      httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      // Use 'lax' for Vercel and Render (both serve from same domain)
-      // Use 'none' only if truly cross-origin (requires secure: true)
-      // Render and Vercel both serve from same domain, so 'lax' works better
-      sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
-      path: '/', // Cookie available for all paths
-      // Don't set domain - let browser handle it (works for both Vercel and Render)
-      // domain: undefined explicitly means current domain
-    },
+  saveUninitialized: true, // Save uninitialized sessions to ensure cookie is set
+  name: 'connect.sid', // Explicit session cookie name
+  cookie: {
+    secure: isProduction, // false for local (HTTP), true for production (HTTPS)
+    httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    // Use 'lax' for Vercel and Render (both serve from same domain)
+    // Use 'none' only if truly cross-origin (requires secure: true)
+    // Render and Vercel both serve from same domain, so 'lax' works better
+    sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
+    path: '/', // Cookie available for all paths
+    // Don't set domain - let browser handle it (works for both Vercel and Render)
+    // domain: undefined explicitly means current domain
+  },
   // Ensure session is saved even if not modified (important for serverless)
-  rolling: false,
-  // Force save on every request to ensure session is available
-  saveUninitialized: false
+  rolling: false
 }));
+
+// Middleware to log session state for debugging (after session middleware)
+if (isProduction) {
+  app.use((req, res, next) => {
+    // Log session state after session middleware has loaded it
+    if (req.session) {
+      console.log('Session state after load:', {
+        sessionId: req.sessionID,
+        hasUserId: !!req.session.userId,
+        hasCurrentQuiz: !!req.session.currentQuiz,
+        cookiePresent: !!req.cookies['connect.sid']
+      });
+    } else {
+      console.log('No session object found');
+    }
+    next();
+  });
+}
 
 // Log session configuration on startup (helpful for debugging)
 if (!isProduction) {
@@ -328,6 +345,12 @@ const validateRequest = (fields) => {
 // This is critical because even on traditional servers (Render), sessions stored in MongoDB
 // need to be explicitly reloaded to get the latest data from the database
 const ensureSessionLoaded = async (req, res, next) => {
+  // Log session cookie info for debugging
+  const sessionCookie = req.cookies['connect.sid'];
+  if (isProduction && sessionCookie) {
+    console.log('Session cookie received:', sessionCookie.substring(0, 20) + '...');
+  }
+  
   // Reload session from MongoDB store to ensure we have latest data
   // This is important because sessions are stored in MongoDB, not in-memory
   // Even on Render, we need to reload from the database to get the latest session state
@@ -340,7 +363,12 @@ const ensureSessionLoaded = async (req, res, next) => {
             // Only log in production to avoid spam
             if (isProduction && err.code !== 'ENOENT') {
               // ENOENT means session doesn't exist yet, which is normal for new sessions
-              console.warn('Session reload warning (non-fatal):', err.message);
+              console.warn('Session reload warning (non-fatal):', err.message, 'Session ID:', req.sessionID);
+            }
+          } else {
+            // Log successful reload
+            if (isProduction) {
+              console.log('Session reloaded successfully. Session ID:', req.sessionID);
             }
           }
           resolve();
@@ -352,6 +380,8 @@ const ensureSessionLoaded = async (req, res, next) => {
         console.warn('Session reload error (non-fatal):', reloadError.message);
       }
     }
+  } else if (isProduction && req.session) {
+    console.log('New session created. Session ID:', req.sessionID);
   }
   next();
 };
@@ -996,6 +1026,27 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
       }
     }
 
+    // Ensure session cookie is set in response
+    // This is critical - the cookie must be set for subsequent requests to use the same session
+    if (req.session && req.sessionID) {
+      // Touch session to ensure it's marked as modified
+      req.session.touch();
+      
+      // Save session one more time before sending response to ensure cookie is set
+      await new Promise((resolve) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving session before quiz start response:', err);
+          } else {
+            if (isProduction) {
+              console.log('Session saved before response. Session ID:', req.sessionID);
+            }
+          }
+          resolve();
+        });
+      });
+    }
+    
     res.json({
       success: true,
       questions: formattedQuestions,

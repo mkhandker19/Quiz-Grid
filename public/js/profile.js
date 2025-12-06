@@ -103,9 +103,5 @@ document.getElementById('homeBtn').addEventListener('click', () => {
     window.location.href = '/index.html';
 });
 
-document.getElementById('startQuizBtn').addEventListener('click', () => {
-    window.location.href = '/quiz.html';
-});
-
 loadProfile();
 

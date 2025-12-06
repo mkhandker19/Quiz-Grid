@@ -807,6 +807,19 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
       currentQuestionIndex: 0,
       startTime: new Date()
     };
+    
+    // Explicitly save session to ensure quiz data is persisted
+    // This is critical for serverless environments where sessions must be explicitly saved
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving quiz session:', err);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
 
     // Verify we got the correct number of questions
     if (selectedQuestions.length !== validAmount) {
@@ -883,7 +896,7 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
 });
 
 
-app.post('/api/quiz/answer', requireAuth, (req, res, next) => {
+app.post('/api/quiz/answer', requireAuth, async (req, res, next) => {
   try {
     if (!req.session.currentQuiz) {
       return res.status(400).json({
@@ -913,6 +926,19 @@ app.post('/api/quiz/answer', requireAuth, (req, res, next) => {
 
     quiz.answers[questionIndex] = answer;
     quiz.currentQuestionIndex = questionIndex;
+    
+    // Save session to ensure answer is persisted (important for serverless)
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving answer to session:', err);
+          // Don't fail the request, but log the error
+          resolve();
+        } else {
+          resolve();
+        }
+      });
+    });
 
     res.json({
       success: true,

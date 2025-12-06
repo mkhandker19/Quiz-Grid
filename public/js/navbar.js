@@ -49,11 +49,16 @@ class NavigationBar {
         const navContainer = document.getElementById('navbar-container');
         if (!navContainer) return;
 
+        // Only link to home if user is authenticated, otherwise no navigation
+        const brandLink = this.user 
+            ? `<a href="/index.html">Quiz Grid</a>`
+            : `<span class="brand-text">Quiz Grid</span>`;
+
         navContainer.innerHTML = `
             <nav class="navbar">
                 <div class="navbar-brand">
                     <img src="/logo.png" alt="Quiz Grid Logo" class="navbar-logo" />
-                    <a href="/index.html">Quiz Grid</a>
+                    ${brandLink}
                 </div>
                 <div class="navbar-menu">
                     ${this.user ? this.renderAuthenticatedMenu() : this.renderUnauthenticatedMenu()}

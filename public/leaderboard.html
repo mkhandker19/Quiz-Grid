@@ -13,29 +13,33 @@
 
         .user-rank-section {
             margin-bottom: 30px;
-            padding: 20px;
-            background: rgba(35, 35, 35, 0.5);
-            border-radius: 8px;
-            border: 1px solid rgba(50, 0, 0, 0.3);
+            padding: 25px;
+            background: linear-gradient(135deg, rgba(0, 255, 127, 0.12), rgba(18, 22, 28, 0.7), rgba(255, 45, 85, 0.12));
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
         }
 
         .user-rank-label {
-            font-size: 0.9rem;
-            color: #cccccc;
+            font-size: 0.95rem;
+            color: var(--text-secondary, #e0e0e0);
             margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .user-rank-value {
-            font-size: 2.5rem;
+            font-size: 3rem;
             font-weight: bold;
-            color: #51cf66;
+            color: var(--green-primary, #00ff7f);
+            text-shadow: 0 0 30px rgba(0, 255, 127, 0.55);
         }
 
         .user-rank-stats {
             display: flex;
             justify-content: space-around;
-            margin-top: 15px;
+            margin-top: 20px;
             gap: 15px;
         }
 
@@ -45,12 +49,12 @@
 
         .user-stat-label {
             font-size: 0.85rem;
-            color: #cccccc;
+            color: var(--text-secondary, #d0d0d0);
             margin-bottom: 5px;
         }
 
         .user-stat-value {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             font-weight: bold;
             color: #ffffff;
         }
@@ -59,21 +63,25 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
-            background: rgba(20, 20, 20, 0.75);
-            border-radius: 8px;
+            background: rgba(15, 15, 20, 0.8);
+            border-radius: 12px;
             overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .leaderboard-table thead {
-            background: rgba(35, 35, 35, 0.8);
+            background: linear-gradient(90deg, rgba(0, 255, 127, 0.18), rgba(18, 22, 28, 0.9), rgba(255, 45, 85, 0.18));
         }
 
         .leaderboard-table th {
-            padding: 15px;
+            padding: 16px;
             text-align: left;
             color: #ffffff;
             font-weight: 600;
-            border-bottom: 2px solid rgba(50, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
         }
 
         .leaderboard-table th:first-child {
@@ -93,40 +101,44 @@
         }
 
         .leaderboard-table tbody tr {
-            border-bottom: 1px solid rgba(50, 0, 0, 0.2);
-            transition: background-color 0.2s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s;
         }
 
         .leaderboard-table tbody tr:hover {
-            background-color: rgba(35, 35, 35, 0.5);
+            background: rgba(40, 40, 50, 0.5);
         }
 
         .leaderboard-table tbody tr.current-user {
-            background-color: rgba(81, 207, 102, 0.15);
-            border-left: 4px solid #51cf66;
+            background: linear-gradient(90deg, rgba(0, 255, 127, 0.22), transparent);
+            border-left: 4px solid var(--green-primary, #00ff7f);
+            box-shadow: inset 0 0 30px rgba(0, 255, 127, 0.1);
         }
 
         .leaderboard-table td {
-            padding: 15px;
+            padding: 16px;
             color: #ffffff;
         }
 
         .rank-cell {
             text-align: center;
             font-weight: bold;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
         }
 
         .rank-cell.rank-1 {
             color: #ffd700;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
         }
 
         .rank-cell.rank-2 {
-            color: #c0c0c0;
+            color: #e0e0e0;
+            text-shadow: 0 0 15px rgba(224, 224, 224, 0.5);
         }
 
         .rank-cell.rank-3 {
             color: #cd7f32;
+            text-shadow: 0 0 15px rgba(205, 127, 50, 0.6);
         }
 
         .username-cell {
@@ -140,27 +152,29 @@
         }
 
         .score-cell.excellent {
-            color: #51cf66;
+            color: var(--green-primary, #00ff7f);
+            text-shadow: 0 0 12px rgba(0, 255, 127, 0.55);
         }
 
         .score-cell.good {
-            color: #ffd43b;
+            color: var(--warning-color, #ffcc00);
+            text-shadow: 0 0 12px rgba(255, 204, 0, 0.55);
         }
 
         .attempts-cell {
             text-align: center;
-            color: #cccccc;
+            color: var(--text-secondary, #d0d0d0);
         }
 
         .avg-score-cell {
             text-align: center;
-            color: #cccccc;
+            color: var(--text-secondary, #d0d0d0);
         }
 
         .no-data {
             text-align: center;
             padding: 40px;
-            color: #cccccc;
+            color: var(--text-secondary, #d0d0d0);
         }
 
         .section-title {
@@ -168,6 +182,7 @@
             font-weight: 600;
             margin-bottom: 15px;
             color: #ffffff;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
         }
 
         .action-buttons {
@@ -181,13 +196,16 @@
         }
 
         .btn-secondary {
-            background-color: #3a3a3a;
-            border-color: #4a4a4a;
+            background: linear-gradient(135deg, rgba(40, 40, 50, 0.8), rgba(50, 50, 60, 0.6));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-secondary, #d0d0d0);
         }
 
         .btn-secondary:hover {
-            background-color: #4a4a4a;
-            border-color: #5a5a5a;
+            background: linear-gradient(135deg, rgba(50, 50, 60, 0.9), rgba(60, 60, 70, 0.7));
+            border-color: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            color: #ffffff;
         }
 
         @media (max-width: 600px) {

@@ -219,12 +219,29 @@ const redirectIfNotAuthenticated = async (req, res, next) => {
 };
 
 // Root route - MUST be defined BEFORE static middleware to prevent serving index.html before auth check
-app.get('/', (req, res) => {
-  if (req.session && req.session.userId) {
-    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
-  } else {
-    res.redirect('/login.html');
+// Shows landing page for new users, redirects authenticated users to home
+app.get('/', async (req, res) => {
+  // Prevent caching of the root route to ensure fresh auth check
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
+  // Check JWT first
+  const token = req.cookies[JWT_COOKIE_NAME];
+  if (token && jwtUtils.verifyToken(token)) {
+    return res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
   }
+  // Check session
+  if (req.session && req.session.userId) {
+    return res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+  }
+  // Not authenticated - show landing page (welcome.html)
+  res.sendFile(path.resolve(__dirname, 'public', 'welcome.html'));
+});
+
+// Welcome/landing page route
+app.get('/welcome.html', (req, res) => {
+  res.sendFile(path.resolve(__dirname, 'public', 'welcome.html'));
 });
 
 // Serve static files (CSS, JS, images, etc.) - but NOT index.html for root path

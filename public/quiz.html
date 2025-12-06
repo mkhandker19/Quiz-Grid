@@ -13,17 +13,21 @@
 
         .question-number {
             text-align: center;
-            color: #cccccc;
+            color: var(--text-secondary, #d0d0d0);
             margin-bottom: 10px;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .question-text {
-            font-size: 1.2rem;
+            font-size: 1.25rem;
             margin-bottom: 30px;
             text-align: center;
             color: #ffffff;
-            line-height: 1.6;
+            line-height: 1.7;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
         }
 
         .answer-options {
@@ -34,10 +38,10 @@
         }
 
         .answer-option {
-            padding: 15px;
-            background-color: rgba(35, 35, 35, 0.9);
-            border: 1px solid rgba(50, 0, 0, 0.3);
-            border-radius: 4px;
+            padding: 16px 20px;
+            background: rgba(25, 25, 30, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
             color: #ffffff;
             font-size: 1rem;
             cursor: pointer;
@@ -46,22 +50,24 @@
         }
 
         .answer-option:hover {
-            background-color: rgba(40, 35, 35, 0.95);
-            border-color: rgba(80, 0, 0, 0.5);
-            box-shadow: 0 0 8px rgba(60, 0, 0, 0.2);
-            transform: translateY(-2px);
+            background: rgba(30, 38, 45, 0.9);
+            border-color: var(--green-primary, #00ff7f);
+            box-shadow: 0 0 25px rgba(0, 255, 127, 0.25);
+            transform: translateY(-3px);
         }
 
         .answer-option.selected {
-            background-color: rgba(60, 0, 0, 0.4);
-            border-color: rgba(100, 0, 0, 0.6);
-            box-shadow: 0 0 12px rgba(80, 0, 0, 0.3);
+            background: linear-gradient(135deg, rgba(0, 255, 127, 0.25), rgba(0, 224, 112, 0.2));
+            border-color: var(--green-primary, #00ff7f);
+            box-shadow: 
+                0 0 30px rgba(0, 255, 127, 0.35),
+                inset 0 0 20px rgba(0, 255, 127, 0.15);
         }
 
         .navigation-buttons {
             display: flex;
             gap: 15px;
-            margin-top: 20px;
+            margin-top: 25px;
         }
 
         .navigation-buttons .btn {
@@ -69,13 +75,16 @@
         }
 
         .btn-secondary {
-            background-color: #3a3a3a;
-            border-color: #4a4a4a;
+            background: linear-gradient(135deg, rgba(40, 40, 50, 0.8), rgba(50, 50, 60, 0.6));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-secondary, #d0d0d0);
         }
 
         .btn-secondary:hover {
-            background-color: #4a4a4a;
-            border-color: #5a5a5a;
+            background: linear-gradient(135deg, rgba(50, 50, 60, 0.9), rgba(60, 60, 70, 0.7));
+            border-color: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            color: #ffffff;
         }
 
         .btn:disabled {

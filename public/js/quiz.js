@@ -67,9 +67,9 @@ async function initQuiz() {
             }
         }
 
-        // Ensure amount is between 10 and 20
-        if (isNaN(quizConfig.amount) || quizConfig.amount < 10) quizConfig.amount = 10;
-        if (quizConfig.amount > 20) quizConfig.amount = 20;
+        // Ensure amount is between 1 and 10
+        if (isNaN(quizConfig.amount) || quizConfig.amount < 1) quizConfig.amount = 1;
+        if (quizConfig.amount > 10) quizConfig.amount = 10;
 
         // Build query parameters - always include amount, include category if provided
         const params = new URLSearchParams();
@@ -110,6 +110,11 @@ async function initQuiz() {
             return;
         }
 
+        // Check if fewer questions were returned than requested
+        if (quizData.requestedAmount && quizData.totalQuestions < quizData.requestedAmount) {
+            showQuestionLimitNotification(quizData.requestedAmount, quizData.totalQuestions);
+        }
+
         questions = quizData.questions;
         totalQuestions = quizData.totalQuestions;
         
@@ -129,6 +134,71 @@ async function initQuiz() {
         alert('Failed to load quiz. Redirecting to home...');
         window.location.href = '/index.html';
     }
+}
+
+// Function to show notification when fewer questions are available
+function showQuestionLimitNotification(requested, available) {
+    // Remove any existing notifications
+    const existingNotification = document.getElementById('quiz-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.id = 'quiz-notification';
+    notification.className = 'success-message';
+    notification.textContent = `You requested ${requested} questions, but the database only has ${available} questions available.`;
+    
+    // Apply base styles before appending
+    Object.assign(notification.style, {
+        position: 'fixed',
+        top: '80px',
+        zIndex: '9999',
+        minWidth: '300px',
+        maxWidth: '90%',
+        textAlign: 'center',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        opacity: '0',
+        transition: 'opacity 0.2s ease-in',
+        visibility: 'hidden',
+        display: 'block',
+        left: '0px'
+    });
+
+    // Append to DOM while hidden
+    document.body.appendChild(notification);
+    
+    // Force layout calculation
+    void notification.offsetWidth;
+    void notification.offsetHeight;
+    
+    // Calculate center position
+    const width = notification.offsetWidth || 300;
+    const leftPosition = Math.max(0, (window.innerWidth - width) / 2);
+    notification.style.left = leftPosition + 'px';
+    
+    // Make visible
+    notification.style.visibility = 'visible';
+    void notification.offsetHeight;
+    
+    // Fade in
+    requestAnimationFrame(() => {
+        notification.style.opacity = '1';
+    });
+
+    // Auto-remove after 5 seconds (longer than logout notification since it's informational)
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s ease-out';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 300);
+        }
+    }, 5000);
 }
 
 function displayQuestion() {

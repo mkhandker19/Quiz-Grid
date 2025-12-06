@@ -587,12 +587,12 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
     const amountParam = req.query.amount;
     const amount = (amountParam && amountParam !== 'undefined') ? parseInt(amountParam) : 10;
 
-    // Validate amount (must be between 10 and 20)
+    // Validate amount (must be between 1 and 10)
     let validAmount = amount;
-    if (isNaN(validAmount) || validAmount < 10) {
+    if (isNaN(validAmount) || validAmount < 1) {
+      validAmount = 1;
+    } else if (validAmount > 10) {
       validAmount = 10;
-    } else if (validAmount > 20) {
-      validAmount = 20;
     }
 
     // Log for debugging (remove in production if desired)
@@ -695,7 +695,8 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
     res.json({
       success: true,
       questions: formattedQuestions,
-      totalQuestions: formattedQuestions.length
+      totalQuestions: formattedQuestions.length,
+      requestedAmount: validAmount // Include requested amount for comparison
     });
 
   } catch (error) {

@@ -19,8 +19,8 @@
         <div class="quiz-config-form">
             <form id="quizConfigForm">
                 <div class="form-group">
-                    <label for="questionCount">Number of questions (10-20)</label>
-                    <input type="number" id="questionCount" name="questionCount" min="10" max="20" value="10" required>
+                    <label for="questionCount">Number of questions (1-10)</label>
+                    <input type="number" id="questionCount" name="questionCount" min="1" max="10" value="10" required>
                 </div>
 
                 <div class="form-group">
@@ -96,11 +96,11 @@
             // Validate question count and enable/disable button
             function validateQuestionCount() {
                 const value = parseInt(questionCountInput.value);
-                const isValid = !isNaN(value) && value >= 10 && value <= 20;
+                const isValid = !isNaN(value) && value >= 1 && value <= 10;
                 startQuizBtn.disabled = !isValid;
                 
                 if (!isValid && questionCountInput.value !== '') {
-                    questionCountInput.setCustomValidity('Please enter a number between 10 and 20');
+                    questionCountInput.setCustomValidity('Please enter a number between 1 and 10');
                 } else {
                     questionCountInput.setCustomValidity('');
                 }
@@ -148,8 +148,8 @@
 
                     // Validate question count before proceeding
                     const count = parseInt(questionCount);
-                    if (isNaN(count) || count < 10 || count > 20) {
-                        alert('Please enter a number of questions between 10 and 20.');
+                    if (isNaN(count) || count < 1 || count > 10) {
+                        alert('Please enter a number of questions between 1 and 10.');
                         startQuizBtn.disabled = false;
                         startQuizBtn.textContent = 'Start Quiz';
                         return;

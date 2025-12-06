@@ -35,20 +35,86 @@ let totalQuestions = 0;
 
 async function initQuiz() {
     try {
+        // Get quiz configuration from URL parameters (preferred) or sessionStorage (fallback)
+        const urlParams = new URLSearchParams(window.location.search);
+        let quizConfig = {
+            amount: 10,
+            category: ''
+        };
 
-        const quizResponse = await fetch('/api/quiz/start', {
+        // First, try to get from URL parameters
+        const urlAmount = urlParams.get('amount');
+        const urlCategory = urlParams.get('category');
+        
+        if (urlAmount || urlCategory) {
+            console.log('Found config in URL parameters:', { amount: urlAmount, category: urlCategory });
+            quizConfig.amount = urlAmount ? parseInt(urlAmount) : 10;
+            quizConfig.category = urlCategory || '';
+        } else {
+            // Fallback to sessionStorage
+            const quizConfigStr = sessionStorage.getItem('quizConfig');
+            if (quizConfigStr) {
+                try {
+                    const storedConfig = JSON.parse(quizConfigStr);
+                    console.log('Loaded quiz config from sessionStorage:', storedConfig);
+                    quizConfig.amount = storedConfig.amount || 10;
+                    quizConfig.category = storedConfig.category || '';
+                } catch (e) {
+                    console.warn('Failed to parse quiz config, using defaults:', e);
+                }
+            } else {
+                console.log('No quiz config found, using defaults');
+            }
+        }
+
+        // Ensure amount is between 10 and 20
+        if (isNaN(quizConfig.amount) || quizConfig.amount < 10) quizConfig.amount = 10;
+        if (quizConfig.amount > 20) quizConfig.amount = 20;
+
+        // Build query parameters - always include amount, include category if provided
+        const params = new URLSearchParams();
+        params.set('amount', quizConfig.amount.toString());
+        if (quizConfig.category && quizConfig.category !== '' && quizConfig.category !== 'undefined') {
+            params.set('category', quizConfig.category);
+        }
+
+        const queryString = params.toString();
+        const apiUrl = '/api/quiz/start?' + queryString;
+        
+        console.log('=== CLIENT: Making API Request ===');
+        console.log('Final quiz config being sent:', quizConfig);
+        console.log('Query string:', queryString);
+        console.log('Full API URL:', apiUrl);
+        console.log('===============================');
+
+        const quizResponse = await fetch(apiUrl, {
             credentials: 'include'
         });
         const quizData = await quizResponse.json();
 
+        console.log('=== CLIENT: Received API Response ===');
+        console.log('Response success:', quizData.success);
+        console.log('Number of questions received:', quizData.questions ? quizData.questions.length : 0);
+        console.log('Total questions reported:', quizData.totalQuestions);
+        console.log('Expected amount:', quizConfig.amount);
+        if (quizData.questions && quizData.questions.length > 0) {
+            console.log('First question:', quizData.questions[0].question.substring(0, 50) + '...');
+        }
+        console.log('====================================');
+
         if (!quizData.success) {
-            alert('Failed to start quiz. Please try again.');
+            // Show user-friendly error message
+            const errorMessage = quizData.message || 'Failed to start quiz. Please try again.';
+            alert(errorMessage);
             window.location.href = '/index.html';
             return;
         }
 
         questions = quizData.questions;
         totalQuestions = quizData.totalQuestions;
+        
+        console.log('Questions array length:', questions.length);
+        console.log('totalQuestions variable:', totalQuestions);
 
         if (questions.length === 0) {
             alert('No questions available. Redirecting to home...');

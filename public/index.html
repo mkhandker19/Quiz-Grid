@@ -13,10 +13,50 @@
     <div class="container">
         <h2 style="margin-bottom: 20px; text-align: center;">Welcome to Quiz Grid</h2>
         <p style="text-align: center; margin-bottom: 30px; color: #cccccc;">
-            Test your knowledge with our 10-question quiz!
+            Customize your quiz experience!
         </p>
         
-        <button id="startQuizBtn" class="btn">Start Quiz</button>
+        <div class="quiz-config-form">
+            <form id="quizConfigForm">
+                <div class="form-group">
+                    <label for="questionCount">Number of questions (10-20)</label>
+                    <input type="number" id="questionCount" name="questionCount" min="10" max="20" value="10" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    <select id="category" name="category">
+                        <option value="">Any Category</option>
+                        <option value="9">General Knowledge</option>
+                        <option value="10">Entertainment: Books</option>
+                        <option value="11">Entertainment: Film</option>
+                        <option value="12">Entertainment: Music</option>
+                        <option value="13">Entertainment: Musicals & Theatres</option>
+                        <option value="14">Entertainment: Television</option>
+                        <option value="15">Entertainment: Video Games</option>
+                        <option value="16">Entertainment: Board Games</option>
+                        <option value="17">Science & Nature</option>
+                        <option value="18">Science: Computers</option>
+                        <option value="19">Science: Mathematics</option>
+                        <option value="20">Mythology</option>
+                        <option value="21">Sports</option>
+                        <option value="22">Geography</option>
+                        <option value="23">History</option>
+                        <option value="24">Politics</option>
+                        <option value="25">Art</option>
+                        <option value="26">Celebrities</option>
+                        <option value="27">Animals</option>
+                        <option value="28">Vehicles</option>
+                        <option value="29">Entertainment: Comics</option>
+                        <option value="30">Science: Gadgets</option>
+                        <option value="31">Entertainment: Japanese Anime & Manga</option>
+                        <option value="32">Entertainment: Cartoon & Animations</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="startQuizBtn" class="btn">Start Quiz</button>
+            </form>
+        </div>
     </div>
 
     <script src="/js/navbar.js"></script>
@@ -49,40 +89,97 @@
         })();
 
         document.addEventListener('DOMContentLoaded', async function() {
+            const quizConfigForm = document.getElementById('quizConfigForm');
+            const questionCountInput = document.getElementById('questionCount');
             const startQuizBtn = document.getElementById('startQuizBtn');
+
+            // Validate question count and enable/disable button
+            function validateQuestionCount() {
+                const value = parseInt(questionCountInput.value);
+                const isValid = !isNaN(value) && value >= 10 && value <= 20;
+                startQuizBtn.disabled = !isValid;
+                
+                if (!isValid && questionCountInput.value !== '') {
+                    questionCountInput.setCustomValidity('Please enter a number between 10 and 20');
+                } else {
+                    questionCountInput.setCustomValidity('');
+                }
+            }
+
+            // Validate on input change
+            questionCountInput.addEventListener('input', validateQuestionCount);
+            questionCountInput.addEventListener('change', validateQuestionCount);
+            questionCountInput.addEventListener('blur', validateQuestionCount);
             
-            startQuizBtn.addEventListener('click', async () => {
+            // Initial validation (should enable button since default is 10)
+            validateQuestionCount();
+
+            // Handle form submission
+            quizConfigForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
                 // Disable button to prevent multiple clicks
                 startQuizBtn.disabled = true;
-                startQuizBtn.textContent = 'Checking...';
+                startQuizBtn.textContent = 'Starting...';
                 
                 try {
                     // Check authentication before navigating
-                    const response = await fetch('/api/auth/status', {
+                    const authResponse = await fetch('/api/auth/status', {
                         credentials: 'include'
                     });
                     
-                    if (response.status === 401) {
+                    if (authResponse.status === 401) {
                         // Not authenticated - redirect to login immediately
                         window.location.href = '/login.html';
                         return;
                     }
                     
-                    const data = await response.json();
+                    const authData = await authResponse.json();
                     
-                    if (data.success && data.authenticated) {
-                        // User is authenticated - proceed to quiz
-                        window.location.href = '/quiz.html';
-                    } else {
+                    if (!authData.success || !authData.authenticated) {
                         // Not authenticated - redirect to login
                         window.location.href = '/login.html';
+                        return;
                     }
+
+                    // Get form values
+                    const questionCount = document.getElementById('questionCount').value;
+                    const category = document.getElementById('category').value;
+
+                    // Validate question count before proceeding
+                    const count = parseInt(questionCount);
+                    if (isNaN(count) || count < 10 || count > 20) {
+                        alert('Please enter a number of questions between 10 and 20.');
+                        startQuizBtn.disabled = false;
+                        startQuizBtn.textContent = 'Start Quiz';
+                        return;
+                    }
+
+                    // Store quiz configuration in sessionStorage
+                    const quizConfig = {
+                        amount: count,
+                        category: category || ''
+                    };
+                    
+                    console.log('Storing quiz config:', quizConfig);
+                    sessionStorage.setItem('quizConfig', JSON.stringify(quizConfig));
+                    
+                    // Verify it was stored
+                    const verifyConfig = sessionStorage.getItem('quizConfig');
+                    console.log('Verified stored config:', verifyConfig);
+                    
+                    // Build URL with query parameters as backup
+                    const params = new URLSearchParams();
+                    params.set('amount', count.toString());
+                    if (category && category !== '') {
+                        params.set('category', category);
+                    }
+                    
+                    // Navigate to quiz page with query parameters
+                    window.location.href = '/quiz.html?' + params.toString();
                 } catch (error) {
-                    console.error('Auth check error:', error);
-                    // On error, redirect to login to be safe
-                    window.location.href = '/login.html';
-                } finally {
-                    // Re-enable button in case of delay
+                    console.error('Error starting quiz:', error);
+                    alert('Failed to start quiz. Please try again.');
                     startQuizBtn.disabled = false;
                     startQuizBtn.textContent = 'Start Quiz';
                 }

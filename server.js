@@ -8,7 +8,7 @@ const MongoStore = MongoStoreModule.default || MongoStoreModule.MongoStore || Mo
 const mongoose = require('mongoose');
 const connectDB = require('./config/database');
 const User = require('./models/User');
-const { getAllQuestions, getQuestionsExcludingUsed } = require('./utils/questions');
+const { getAllQuestions, getQuestionsExcludingUsed, getCategories } = require('./utils/questions');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -553,44 +553,112 @@ app.get('/api/leaderboard', requireAuth, async (req, res, next) => {
 });
 
 const initializeUsedQuestions = (req) => {
-  if (!req.session.usedQuestionIndices) {
-    req.session.usedQuestionIndices = [];
+  if (!req.session.usedQuestionIds) {
+    req.session.usedQuestionIds = [];
   }
 };
 
-
-app.get('/api/quiz/start', requireAuth, (req, res, next) => {
+// Endpoint to get available categories from Trivia API
+app.get('/api/quiz/categories', requireAuth, async (req, res, next) => {
   try {
+    const categories = await getCategories();
+    res.json({
+      success: true,
+      categories: categories
+    });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(503).json({
+      success: false,
+      message: 'Unable to fetch categories. Please try again later.'
+    });
+  }
+});
+
+app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
+  try {
+    // Clear any existing quiz session to ensure fresh questions are fetched
+    req.session.currentQuiz = null;
     initializeUsedQuestions(req);
 
-    const selectedQuestions = getQuestionsExcludingUsed(
-      req.session.usedQuestionIndices,
-      10
+    // Get category and amount from query parameters
+    // IMPORTANT: req.query should contain the parameters from the API request
+    const category = (req.query.category && req.query.category !== 'undefined') ? String(req.query.category).trim() : '';
+    const amountParam = req.query.amount;
+    const amount = (amountParam && amountParam !== 'undefined') ? parseInt(amountParam) : 10;
+
+    // Validate amount (must be between 10 and 20)
+    let validAmount = amount;
+    if (isNaN(validAmount) || validAmount < 10) {
+      validAmount = 10;
+    } else if (validAmount > 20) {
+      validAmount = 20;
+    }
+
+    // Log for debugging (remove in production if desired)
+    if (!isProduction) {
+      console.log('=== QUIZ START REQUEST ===');
+      console.log('Raw query params:', JSON.stringify(req.query));
+      console.log('req.query.amount:', req.query.amount, 'type:', typeof req.query.amount);
+      console.log('req.query.category:', req.query.category, 'type:', typeof req.query.category);
+      console.log('Parsed values:', { category, amount, validAmount });
+      console.log('Category type:', typeof category, 'Category value:', category);
+      console.log('Amount type:', typeof amount, 'Amount value:', amount);
+    }
+
+    // Fetch questions from Trivia API (no difficulty parameter)
+    // IMPORTANT: Pass the exact amount requested, not a default
+    console.log(`Calling getQuestionsExcludingUsed with: count=${validAmount}, category="${category}"`);
+    const selectedQuestions = await getQuestionsExcludingUsed(
+      req.session.usedQuestionIds || [],
+      validAmount, // This should be 20 if requested
+      category,
+      '' // No difficulty parameter
     );
 
-    
-    const selectedIndices = selectedQuestions.map(q => q._index);
+    if (!isProduction) {
+      console.log(`✓ Fetched ${selectedQuestions.length} questions`);
+      console.log(`  - Requested: ${validAmount} questions`);
+      console.log(`  - Category: ${category || 'Any Category'}`);
+      console.log('=== END QUIZ START REQUEST ===');
+    }
 
-   
-    req.session.usedQuestionIndices = [
-      ...req.session.usedQuestionIndices,
-      ...selectedIndices
+    // Track used question IDs
+    const selectedQuestionIds = selectedQuestions.map(q => q._questionId);
+
+    // Update session with used question IDs
+    req.session.usedQuestionIds = [
+      ...req.session.usedQuestionIds,
+      ...selectedQuestionIds
     ];
 
-   
+    // Store quiz data in session (remove internal tracking fields)
     req.session.currentQuiz = {
       questions: selectedQuestions.map(q => {
-        const { _index, ...question } = q;
+        const { _index, _questionId, ...question } = q;
         return question;
       }),
-      questionIndices: selectedIndices,
+      questionIds: selectedQuestionIds,
       answers: {},
       currentQuestionIndex: 0,
       startTime: new Date()
     };
 
+    // Verify we got the correct number of questions
+    if (selectedQuestions.length !== validAmount) {
+      if (!isProduction) {
+        console.warn(`⚠️ Warning: Requested ${validAmount} questions but got ${selectedQuestions.length}`);
+        console.warn(`  This might be due to limited questions in the selected category or previously used questions.`);
+      }
+    } else {
+      if (!isProduction) {
+        console.log(`✓ Got exactly ${validAmount} questions as requested`);
+      }
+    }
+
+    // Format questions for client (hide correct answer)
     const formattedQuestions = selectedQuestions.map((q, index) => {
-      const { _index, answer, ...questionData } = q;
+      const { _index, _questionId, answer, ...questionData } = q;
       return {
         questionNumber: index + 1,
         question: questionData.question,
@@ -603,6 +671,27 @@ app.get('/api/quiz/start', requireAuth, (req, res, next) => {
       };
     });
 
+    if (!isProduction) {
+      console.log(`✓ Returning ${formattedQuestions.length} formatted questions to client`);
+      if (selectedQuestions.length > 0) {
+        // Verify category matches (if category was specified)
+        if (category) {
+          const categoriesInResults = [...new Set(selectedQuestions.map(q => q.category))];
+          console.log(`  - Categories in results: ${categoriesInResults.join(', ')}`);
+          console.log(`  - Requested category ID: ${category}`);
+          
+          // Check if all questions match the requested category
+          const allMatchCategory = selectedQuestions.every(q => {
+            // The category field in the question might be the name, not the ID
+            // So we'll just log it for now
+            return true; // We'll verify this differently
+          });
+        } else {
+          console.log(`  - No category filter (Any Category)`);
+        }
+      }
+    }
+
     res.json({
       success: true,
       questions: formattedQuestions,
@@ -610,7 +699,21 @@ app.get('/api/quiz/start', requireAuth, (req, res, next) => {
     });
 
   } catch (error) {
-    next(error);
+    console.error('Error starting quiz:', error);
+    // Provide user-friendly error messages
+    if (error.message.includes('No results found')) {
+      return res.status(400).json({
+        success: false,
+        message: 'No questions found for the selected category. Please try a different category or try again later.'
+      });
+    } else if (error.message.includes('Network error') || error.message.includes('timeout')) {
+      return res.status(503).json({
+        success: false,
+        message: 'Unable to fetch questions from the trivia service. Please check your internet connection and try again.'
+      });
+    } else {
+      next(error);
+    }
   }
 });
 
@@ -806,7 +909,7 @@ app.get('/api/quiz/results', requireAuth, (req, res, next) => {
 });
 
 app.post('/api/quiz/reset', requireAuth, (req, res) => {
-  req.session.usedQuestionIndices = [];
+  req.session.usedQuestionIds = [];
   req.session.currentQuiz = null;
   req.session.quizResults = null;
   res.json({

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Quiz Grid</title>
+    <link rel="icon" type="image/png" href="/transparent logo.png">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -51,6 +52,75 @@
             const errorContainer = document.getElementById('errorMessage');
             const loginForm = document.getElementById('loginForm');
             
+            // Function to show notification (similar to logout notification style)
+            function showLoginNotification(message, type = 'error') {
+                // Remove any existing notifications
+                const existingNotification = document.getElementById('login-notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
+
+                // Create notification element with all styles applied before appending
+                const notification = document.createElement('div');
+                notification.id = 'login-notification';
+                notification.className = type === 'success' ? 'success-message' : 'error-message';
+                notification.textContent = message;
+                
+                // Apply base styles before appending (completely hidden)
+                Object.assign(notification.style, {
+                    position: 'fixed',
+                    top: '80px',
+                    zIndex: '9999',
+                    minWidth: '300px',
+                    maxWidth: '90%',
+                    textAlign: 'center',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                    opacity: '0',
+                    transition: 'opacity 0.2s ease-in',
+                    visibility: 'hidden',
+                    display: 'block',
+                    left: '0px' // Temporary, will be recalculated
+                });
+
+                // Append to DOM while hidden
+                document.body.appendChild(notification);
+                
+                // Force layout calculation while still hidden
+                void notification.offsetWidth;
+                void notification.offsetHeight;
+                
+                // Get the actual width
+                const width = notification.offsetWidth || 300;
+                
+                // Calculate exact center position BEFORE making visible
+                const leftPosition = Math.max(0, (window.innerWidth - width) / 2);
+                notification.style.left = leftPosition + 'px';
+                
+                // Now make it visible - position is already set correctly
+                notification.style.visibility = 'visible';
+                
+                // Force one more reflow to ensure position is applied
+                void notification.offsetHeight;
+                
+                // Fade in smoothly
+                requestAnimationFrame(() => {
+                    notification.style.opacity = '1';
+                });
+
+                // Auto-remove after 3 seconds
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.style.opacity = '0';
+                        notification.style.transition = 'opacity 0.3s ease-out';
+                        setTimeout(() => {
+                            if (notification.parentNode) {
+                                notification.remove();
+                            }
+                        }, 300);
+                    }
+                }, 3000);
+            }
+            
             if (!loginForm) {
                 console.error('Login form not found!');
                 return;
@@ -58,13 +128,28 @@
             
             if (!errorContainer) {
                 console.error('Error container not found!');
-                return;
+                // Create error container if it doesn't exist
+                const form = loginForm;
+                const newErrorContainer = document.createElement('div');
+                newErrorContainer.id = 'errorMessage';
+                newErrorContainer.className = 'error-message';
+                newErrorContainer.style.display = 'none';
+                newErrorContainer.style.marginTop = '10px';
+                form.appendChild(newErrorContainer);
+                // Use the newly created container
+                const createdContainer = document.getElementById('errorMessage');
+                if (!createdContainer) {
+                    console.error('Failed to create error container!');
+                    return;
+                }
             }
             
             // Check if user is already authenticated
             async function checkAuth() {
                 try {
-                    const response = await fetch('/api/auth/status');
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'include'
+                    });
                     if (response.ok) {
                         const data = await response.json();
                         if (data.success && data.authenticated) {
@@ -174,11 +259,12 @@
                 e.preventDefault();
                 console.log('Login form submitted!'); // Debug log
                 
-                // Clear previous errors
-                if (errorContainer) {
-                    errorContainer.textContent = '';
-                    errorContainer.style.display = 'none';
-                    errorContainer.className = 'error-message';
+                // Clear previous errors (but keep the container ready)
+                const errorMsgEl = document.getElementById('errorMessage');
+                if (errorMsgEl) {
+                    errorMsgEl.textContent = '';
+                    errorMsgEl.style.display = 'none';
+                    errorMsgEl.className = 'error-message';
                 }
                 if (errorContainer && errorContainer.parentElement) {
                     validator.clearFormError(errorContainer.parentElement);
@@ -240,23 +326,39 @@
                     });
                     
                     console.log('Response status:', response.status); // Debug log
-                    const data = await response.json();
-                    console.log('Response data:', data); // Debug log
                     
-                    if (data.success) {
-                        // Success - redirect to home page
-                        window.location.href = '/index.html';
+                    // Try to parse JSON response (works for both success and error responses)
+                    let data;
+                    try {
+                        const responseText = await response.text();
+                        console.log('Response text:', responseText); // Debug log
+                        
+                        if (responseText) {
+                            data = JSON.parse(responseText);
+                            console.log('Response data:', data); // Debug log
+                        } else {
+                            data = { success: false, message: 'Empty response from server' };
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse response:', parseError);
+                        // If JSON parsing fails, show generic error
+                        showLoginNotification('Wrong Email/Username or Password. Please try again.', 'error');
+                        return;
+                    }
+                    
+                    // Check if response is ok and data indicates success
+                    if (response.ok && data && data.success) {
+                        // Success - small delay to ensure session cookie is set before redirect
+                        setTimeout(() => {
+                            window.location.href = '/index.html';
+                        }, 100);
                     } else {
-                        // Show error message
-                        errorContainer.textContent = data.message || 'Login failed. Please check your credentials and try again.';
-                        errorContainer.className = 'error-message';
-                        errorContainer.style.display = 'block';
+                        // Show red notification for wrong credentials (similar to logout notification)
+                        showLoginNotification('Wrong Email/Username or Password. Please try again.', 'error');
                     }
                 } catch (error) {
                     console.error('Login error:', error);
-                    errorContainer.textContent = 'Unable to connect to server. Please check your internet connection and try again.';
-                    errorContainer.className = 'error-message';
-                    errorContainer.style.display = 'block';
+                    showLoginNotification('Unable to connect to server. Please check your internet connection and try again.', 'error');
                 } finally {
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - Quiz Grid</title>
+    <link rel="icon" type="image/png" href="/transparent logo.png">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -69,7 +70,9 @@
             // Check if user is already authenticated
             async function checkAuth() {
                 try {
-                    const response = await fetch('/api/auth/status');
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'include'
+                    });
                     if (response.ok) {
                         const data = await response.json();
                         if (data.success && data.authenticated) {

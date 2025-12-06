@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home - Quiz Grid</title>
+    <link rel="icon" type="image/png" href="/transparent logo.png">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -20,6 +21,33 @@
 
     <script src="/js/navbar.js"></script>
     <script>
+        // Check authentication immediately when page loads
+        (async function checkAuthOnLoad() {
+            try {
+                const response = await fetch('/api/auth/status', {
+                    credentials: 'include'
+                });
+                
+                if (response.status === 401) {
+                    // Not authenticated - redirect to login immediately
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success || !data.authenticated) {
+                    // Not authenticated - redirect to login immediately
+                    window.location.href = '/login.html';
+                    return;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                // On error, redirect to login to be safe
+                window.location.href = '/login.html';
+            }
+        })();
+
         document.addEventListener('DOMContentLoaded', async function() {
             const startQuizBtn = document.getElementById('startQuizBtn');
             

@@ -3,15 +3,15 @@ let questions = [];
 let userAnswers = {};
 let totalQuestions = 0;
 
-async function initQuiz() {
+// Check authentication immediately when script loads - before any other operations
+(async function checkAuthFirst() {
     try {
-        // Check authentication first - redirect immediately if not authenticated
         const authResponse = await fetch('/api/auth/status', {
             credentials: 'include'
         });
         
         if (authResponse.status === 401) {
-            // Not authenticated - redirect immediately
+            // Not authenticated - redirect immediately before any quiz loading
             window.location.href = '/login.html';
             return;
         }
@@ -19,12 +19,26 @@ async function initQuiz() {
         const authData = await authResponse.json();
         
         if (!authData.success || !authData.authenticated) {
-            // Not authenticated - redirect immediately
+            // Not authenticated - redirect immediately before any quiz loading
             window.location.href = '/login.html';
             return;
         }
+        
+        // Only proceed with quiz initialization if authenticated
+        initQuiz();
+    } catch (error) {
+        console.error('Auth check error:', error);
+        // On error, redirect to login to be safe
+        window.location.href = '/login.html';
+    }
+})();
 
-        const quizResponse = await fetch('/api/quiz/start');
+async function initQuiz() {
+    try {
+
+        const quizResponse = await fetch('/api/quiz/start', {
+            credentials: 'include'
+        });
         const quizData = await quizResponse.json();
 
         if (!quizData.success) {
@@ -99,6 +113,7 @@ async function selectAnswer(answerKey) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 questionIndex: currentQuestionIndex,
                 answer: answerKey
@@ -178,6 +193,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 answers: userAnswers
             })
@@ -195,6 +211,4 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
         alert('An error occurred while submitting the quiz. Please try again.');
     }
 });
-
-initQuiz();
 

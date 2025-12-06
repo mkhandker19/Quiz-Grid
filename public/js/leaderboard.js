@@ -1,6 +1,8 @@
 async function loadLeaderboard() {
     try {
-        const authResponse = await fetch('/api/auth/status');
+        const authResponse = await fetch('/api/auth/status', {
+            credentials: 'include'
+        });
         const authData = await authResponse.json();
         
         if (!authData.success || !authData.authenticated) {
@@ -8,7 +10,9 @@ async function loadLeaderboard() {
             return;
         }
 
-        const leaderboardResponse = await fetch('/api/leaderboard');
+        const leaderboardResponse = await fetch('/api/leaderboard', {
+            credentials: 'include'
+        });
         const leaderboardData = await leaderboardResponse.json();
 
         if (!leaderboardData.success) {

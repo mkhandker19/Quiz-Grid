@@ -1,6 +1,8 @@
 async function loadResults() {
     try {
-        const authResponse = await fetch('/api/auth/status');
+        const authResponse = await fetch('/api/auth/status', {
+            credentials: 'include'
+        });
         const authData = await authResponse.json();
         
         if (!authData.success || !authData.authenticated) {
@@ -8,7 +10,9 @@ async function loadResults() {
             return;
         }
 
-        const resultsResponse = await fetch('/api/quiz/results');
+        const resultsResponse = await fetch('/api/quiz/results', {
+            credentials: 'include'
+        });
         const resultsData = await resultsResponse.json();
 
         if (!resultsData.success) {

@@ -1,6 +1,8 @@
 async function loadProfile() {
     try {
-        const authResponse = await fetch('/api/auth/status');
+        const authResponse = await fetch('/api/auth/status', {
+            credentials: 'include'
+        });
         const authData = await authResponse.json();
         
         if (!authData.success || !authData.authenticated) {
@@ -8,7 +10,9 @@ async function loadProfile() {
             return;
         }
 
-        const profileResponse = await fetch('/api/user/profile');
+        const profileResponse = await fetch('/api/user/profile', {
+            credentials: 'include'
+        });
         const profileData = await profileResponse.json();
 
         if (!profileData.success) {

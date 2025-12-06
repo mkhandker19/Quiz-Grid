@@ -32,6 +32,10 @@ const ensureDBConnection = async (req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Determine if we're in production (Vercel sets VERCEL env var)
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+
+// Session configuration - works for both local and production
 app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
   store: MongoStore.create({
@@ -42,12 +46,26 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', 
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' 
+    secure: isProduction, // false for local (HTTP), true for production (HTTPS)
+    httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: isProduction ? 'none' : 'lax', // 'lax' for local, 'none' for production (cross-origin)
+    path: '/' // Cookie available for all paths
   }
 }));
+
+// Log session configuration on startup (helpful for debugging)
+if (!isProduction) {
+  console.log('Session Configuration (Local):');
+  console.log(`  - secure: false (HTTP allowed)`);
+  console.log(`  - sameSite: lax (works with localhost)`);
+  console.log(`  - httpOnly: true`);
+} else {
+  console.log('Session Configuration (Production):');
+  console.log(`  - secure: true (HTTPS required)`);
+  console.log(`  - sameSite: none (cross-origin support)`);
+  console.log(`  - httpOnly: true`);
+}
 
 app.use(express.static(path.resolve(__dirname, 'public')));
 
@@ -286,6 +304,11 @@ app.post('/api/login', validateRequest([
 ]), async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    
+    // Debug logging for localhost
+    if (!isProduction) {
+      console.log('Login attempt for:', email);
+    }
 
     const user = await User.findOne({
       $or: [
@@ -314,11 +337,48 @@ app.post('/api/login', validateRequest([
     req.session.username = user.username;
     req.session.email = user.email;
 
+    // Explicitly save session to ensure it's persisted (works in both local and production)
+    // Use promise-based approach for better async handling
+    try {
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            reject(err);
+          } else {
+            if (!isProduction) {
+              console.log('Session saved successfully for user:', user.username);
+            }
+            resolve();
+          }
+        });
+      });
+    } catch (sessionError) {
+      // Log the error but don't fail the login - session might still work
+      console.error('Session save failed, but continuing with login:', sessionError);
+      // The session data is already set, so we'll proceed
+      // In some cases, the session might still work even if save callback fails
+    }
+
+    // Verify session was set
+    if (!req.session.userId) {
+      console.error('Session userId not set after login attempt');
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create session. Please try again.'
+      });
+    }
+
     const userResponse = {
       id: user._id,
       username: user.username,
       email: user.email
     };
+
+    if (!isProduction) {
+      console.log('Sending login success response for user:', user.username);
+      console.log('Session userId:', req.session.userId);
+    }
 
     res.json({
       success: true,
@@ -332,6 +392,12 @@ app.post('/api/login', validateRequest([
 });
 
 app.post('/api/logout', (req, res) => {
+  // Get the session cookie name before destroying the session
+  // Default express-session cookie name is 'connect.sid'
+  const sessionCookieName = (req.session && req.session.cookie) 
+    ? req.session.cookie.name 
+    : 'connect.sid';
+  
   req.session.destroy((err) => {
     if (err) {
       console.error('Logout error:', err);
@@ -341,7 +407,16 @@ app.post('/api/logout', (req, res) => {
       });
     }
 
-    res.clearCookie('connect.sid'); 
+    // Clear the session cookie with proper settings matching the session configuration
+    // This ensures it works in both local and production
+    res.clearCookie(sessionCookieName, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
+      maxAge: 0 // Immediately expire the cookie
+    });
+    
     res.json({
       success: true,
       message: 'Logged out successfully'
@@ -744,9 +819,26 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Visit http://localhost:${PORT} to see the app`);
+    console.log(`Environment: ${isProduction ? 'production' : 'development'}`);
+    console.log(`Session secure: ${isProduction}, sameSite: ${isProduction ? 'none' : 'lax'}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Port ${PORT} is already in use.`);
+      console.error(`Please either:`);
+      console.error(`  1. Stop the other process using port ${PORT}`);
+      console.error(`  2. Set PORT environment variable to use a different port (e.g., PORT=3001)`);
+      console.error(`\nTo find what's using port ${PORT}, run:`);
+      console.error(`  Windows: netstat -ano | findstr :${PORT}`);
+      console.error(`  Mac/Linux: lsof -i :${PORT}\n`);
+      process.exit(1);
+    } else {
+      throw err;
+    }
   });
 }
 

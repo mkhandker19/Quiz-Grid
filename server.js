@@ -555,6 +555,10 @@ app.post('/api/logout', (req, res) => {
       maxAge: 0 // Immediately expire the cookie
     });
     
+    // Clear the JWT cookie (critical - app uses hybrid auth: JWT first, then session)
+    // Without this, users remain authenticated via JWT even after logout
+    jwtUtils.clearTokenCookie(res);
+    
     res.json({
       success: true,
       message: 'Logged out successfully'
@@ -898,7 +902,30 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
 
 app.post('/api/quiz/answer', requireAuth, async (req, res, next) => {
   try {
+    // Enhanced session validation with better error logging
+    if (!req.session) {
+      console.error('Session object is missing in /api/quiz/answer');
+      return res.status(400).json({
+        success: false,
+        message: 'Session not available. Please start a quiz first.'
+      });
+    }
+    
     if (!req.session.currentQuiz) {
+      // Log additional context for debugging session issues
+      const sessionInfo = {
+        hasSession: !!req.session,
+        hasUserId: !!req.session.userId,
+        hasCurrentQuiz: !!req.session.currentQuiz,
+        authMethod: req.authMethod || 'unknown'
+      };
+      
+      if (isProduction) {
+        console.error('Quiz answer failed - no currentQuiz in session:', sessionInfo);
+      } else {
+        console.warn('Quiz answer failed - no currentQuiz in session:', sessionInfo);
+      }
+      
       return res.status(400).json({
         success: false,
         message: 'No active quiz session. Please start a quiz first.'
@@ -954,7 +981,31 @@ app.post('/api/quiz/answer', requireAuth, async (req, res, next) => {
 
 app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
   try {
+    // Enhanced session validation with better error logging
+    if (!req.session) {
+      console.error('Session object is missing in /api/quiz/submit');
+      return res.status(400).json({
+        success: false,
+        message: 'Session not available. Please start a quiz first.'
+      });
+    }
+    
     if (!req.session.currentQuiz) {
+      // Log additional context for debugging session issues
+      const sessionInfo = {
+        hasSession: !!req.session,
+        hasUserId: !!req.session.userId,
+        hasCurrentQuiz: !!req.session.currentQuiz,
+        hasQuizResults: !!req.session.quizResults,
+        authMethod: req.authMethod || 'unknown'
+      };
+      
+      if (isProduction) {
+        console.error('Quiz submission failed - no currentQuiz in session:', sessionInfo);
+      } else {
+        console.warn('Quiz submission failed - no currentQuiz in session:', sessionInfo);
+      }
+      
       return res.status(400).json({
         success: false,
         message: 'No active quiz session. Please start a quiz first.'
@@ -1009,6 +1060,21 @@ app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
 
     req.session.quizResults = quizResults;
     req.session.currentQuiz = null;
+    
+    // Explicitly save session to ensure changes are persisted (critical for serverless)
+    // This ensures quizResults and currentQuiz changes are saved before response is sent
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving quiz submission to session:', err);
+          // Don't fail the request, but log the error
+          // The response will still be sent, but session might not be updated
+          resolve();
+        } else {
+          resolve();
+        }
+      });
+    });
 
     try {
       const user = await User.findById(req.user.id);

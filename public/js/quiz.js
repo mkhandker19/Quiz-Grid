@@ -2,6 +2,7 @@ let currentQuestionIndex = 0;
 let questions = [];
 let userAnswers = {};
 let totalQuestions = 0;
+let quizInProgress = false;
 
 // Check authentication immediately when script loads - before any other operations
 (async function checkAuthFirst() {
@@ -106,6 +107,7 @@ async function initQuiz() {
             // Show user-friendly error message
             const errorMessage = quizData.message || 'Failed to start quiz. Please try again.';
             alert(errorMessage);
+            disableBackButtonProtection(); // Clean up event listeners
             window.location.href = '/index.html';
             return;
         }
@@ -123,17 +125,118 @@ async function initQuiz() {
 
         if (questions.length === 0) {
             alert('No questions available. Redirecting to home...');
+            disableBackButtonProtection(); // Clean up event listeners
             window.location.href = '/index.html';
             return;
         }
 
         displayQuestion();
         updateProgress();
+        
+        // Enable browser back button protection
+        enableBackButtonProtection();
+        quizInProgress = true;
     } catch (error) {
         console.error('Error initializing quiz:', error);
         alert('Failed to load quiz. Redirecting to home...');
+        disableBackButtonProtection(); // Clean up event listeners
         window.location.href = '/index.html';
     }
+}
+
+// Browser back button protection during quiz
+function enableBackButtonProtection() {
+    // Push a state to prevent back navigation
+    history.pushState({ quizInProgress: true }, '', window.location.href);
+    
+    // Listen for back button
+    window.addEventListener('popstate', handleBackButton);
+    
+    // Also prevent page unload (closing tab/window)
+    window.addEventListener('beforeunload', handleBeforeUnload);
+}
+
+function handleBackButton(event) {
+    // Show notification warning
+    showBackButtonWarning();
+    
+    // Push state again to prevent navigation
+    history.pushState({ quizInProgress: true }, '', window.location.href);
+}
+
+function handleBeforeUnload(event) {
+    if (quizInProgress) {
+        // Standard way to show browser's native confirmation dialog
+        event.preventDefault();
+        event.returnValue = 'Are you sure you want to leave? Your quiz progress will be lost.';
+        return event.returnValue;
+    }
+}
+
+function showBackButtonWarning() {
+    // Remove any existing notifications
+    const existingNotification = document.getElementById('back-button-warning');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+
+    // Create warning notification
+    const notification = document.createElement('div');
+    notification.id = 'back-button-warning';
+    notification.className = 'error-message';
+    notification.textContent = 'Cannot go back during quiz. Please complete the quiz first.';
+    
+    // Apply styles
+    Object.assign(notification.style, {
+        position: 'fixed',
+        top: '80px',
+        zIndex: '9999',
+        minWidth: '300px',
+        maxWidth: '90%',
+        textAlign: 'center',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        opacity: '0',
+        transition: 'opacity 0.2s ease-in',
+        visibility: 'hidden',
+        display: 'block',
+        left: '0px'
+    });
+
+    document.body.appendChild(notification);
+    
+    // Calculate center position
+    void notification.offsetWidth;
+    void notification.offsetHeight;
+    const width = notification.offsetWidth || 300;
+    const leftPosition = Math.max(0, (window.innerWidth - width) / 2);
+    notification.style.left = leftPosition + 'px';
+    notification.style.visibility = 'visible';
+    void notification.offsetHeight;
+    
+    // Fade in
+    requestAnimationFrame(() => {
+        notification.style.opacity = '1';
+    });
+
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s ease-out';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 300);
+        }
+    }, 4000);
+}
+
+// Clean up event listeners when quiz is submitted
+function disableBackButtonProtection() {
+    quizInProgress = false;
+    window.removeEventListener('popstate', handleBackButton);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
 }
 
 // Function to show notification when fewer questions are available
@@ -338,6 +441,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
         const data = await response.json();
         
         if (data.success) {
+            // Disable back button protection before redirecting
+            disableBackButtonProtection();
             window.location.href = '/results.html';
         } else {
             alert('Failed to submit quiz. Please try again.');

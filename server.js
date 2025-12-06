@@ -67,6 +67,33 @@ if (!isProduction) {
   console.log(`  - httpOnly: true`);
 }
 
+// Middleware to redirect authenticated users away from login/signup
+const redirectIfAuthenticated = (req, res, next) => {
+  if (req.session && req.session.userId) {
+    return res.redirect('/index.html');
+  }
+  next();
+};
+
+// Middleware to redirect unauthenticated users to login
+const redirectIfNotAuthenticated = (req, res, next) => {
+  if (req.session && req.session.userId) {
+    next();
+  } else {
+    return res.redirect('/login.html');
+  }
+};
+
+// Root route - MUST be defined BEFORE static middleware to prevent serving index.html before auth check
+app.get('/', (req, res) => {
+  if (req.session && req.session.userId) {
+    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+  } else {
+    res.redirect('/login.html');
+  }
+});
+
+// Serve static files (CSS, JS, images, etc.) - but NOT index.html for root path
 app.use(express.static(path.resolve(__dirname, 'public')));
 
 // Error handling middleware
@@ -180,31 +207,6 @@ const requireAuth = (req, res, next) => {
   }
 };
 
-// Middleware to redirect authenticated users away from login/signup
-const redirectIfAuthenticated = (req, res, next) => {
-  if (req.session && req.session.userId) {
-    return res.redirect('/index.html');
-  }
-  next();
-};
-
-// Middleware to redirect unauthenticated users to login
-const redirectIfNotAuthenticated = (req, res, next) => {
-  if (req.session && req.session.userId) {
-    next();
-  } else {
-    return res.redirect('/login.html');
-  }
-};
-
-// Root route
-app.get('/', (req, res) => {
-  if (req.session && req.session.userId) {
-    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
-  } else {
-    res.redirect('/login.html');
-  }
-});
 
 app.get('/index.html', redirectIfNotAuthenticated, (req, res) => {
   res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
@@ -548,6 +550,16 @@ const initializeUsedQuestions = (req) => {
   if (!req.session.usedQuestionIds) {
     req.session.usedQuestionIds = [];
   }
+  
+  // Automatic cleanup: if usedQuestionIds exceeds 100, keep only the most recent 50
+  // This prevents the array from growing indefinitely and improves performance
+  if (req.session.usedQuestionIds.length > 100) {
+    // Keep the most recent 50 questions (last 50 in array)
+    req.session.usedQuestionIds = req.session.usedQuestionIds.slice(-50);
+    if (!isProduction) {
+      console.log(`Cleaned up used questions. Kept ${req.session.usedQuestionIds.length} most recent questions.`);
+    }
+  }
 };
 
 // Endpoint to get available categories from Trivia API
@@ -623,6 +635,15 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
       ...req.session.usedQuestionIds,
       ...selectedQuestionIds
     ];
+    
+    // Cleanup after adding new questions: if exceeds 100, keep only most recent 50
+    // This ensures the array doesn't grow too large even if user takes many quizzes
+    if (req.session.usedQuestionIds.length > 100) {
+      req.session.usedQuestionIds = req.session.usedQuestionIds.slice(-50);
+      if (!isProduction) {
+        console.log(`Cleaned up used questions after adding new ones. Kept ${req.session.usedQuestionIds.length} most recent.`);
+      }
+    }
 
     // Store quiz data in session (remove internal tracking fields)
     req.session.currentQuiz = {

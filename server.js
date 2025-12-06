@@ -35,10 +35,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); // Required to parse JWT cookies
 
-// Determine if we're in production (Vercel sets VERCEL env var)
+
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
-// Vercel serves from same domain, so we can use 'lax' instead of 'none'
+
 const isVercel = process.env.VERCEL === '1';
+const isRender = process.env.RENDER === 'true' || (isProduction && !isVercel && process.env.PORT); // Render sets RENDER=true and provides PORT
 
 // JWT Configuration
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'quiz-grid-jwt-secret-change-in-production';
@@ -71,7 +72,7 @@ const jwtUtils = {
     const cookieOptions = {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+      sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
       path: '/',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     };
@@ -83,7 +84,7 @@ const jwtUtils = {
     const cookieOptions = {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+      sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
       path: '/',
       maxAge: 0
     };
@@ -135,17 +136,18 @@ app.use(session({
   store: sessionStore,
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    secure: isProduction, // false for local (HTTP), true for production (HTTPS)
-    httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    // Use 'lax' for Vercel (same domain) and 'none' only if truly cross-origin
-    // Vercel serves everything from the same domain, so 'lax' works better
-    sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
-    path: '/', // Cookie available for all paths
-    // Don't set domain - let browser handle it (important for Vercel)
-    // domain: undefined explicitly means current domain
-  },
+    cookie: {
+      secure: isProduction, // false for local (HTTP), true for production (HTTPS)
+      httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      // Use 'lax' for Vercel and Render (both serve from same domain)
+      // Use 'none' only if truly cross-origin (requires secure: true)
+      // Render and Vercel both serve from same domain, so 'lax' works better
+      sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
+      path: '/', // Cookie available for all paths
+      // Don't set domain - let browser handle it (works for both Vercel and Render)
+      // domain: undefined explicitly means current domain
+    },
   // Ensure session is saved even if not modified (important for serverless)
   rolling: false,
   // Force save on every request to ensure session is available
@@ -159,9 +161,10 @@ if (!isProduction) {
   console.log(`  - sameSite: lax (works with localhost)`);
   console.log(`  - httpOnly: true`);
 } else {
-  console.log('Session Configuration (Production):');
+  const platform = isVercel ? 'Vercel' : (isRender ? 'Render' : 'Production');
+  console.log(`Session Configuration (${platform}):`);
   console.log(`  - secure: true (HTTPS required)`);
-  console.log(`  - sameSite: ${isVercel ? 'lax' : 'none'} (${isVercel ? 'Vercel same-domain' : 'cross-origin support'})`);
+  console.log(`  - sameSite: ${(isVercel || isRender) ? 'lax' : 'none'} (${(isVercel || isRender) ? 'same-domain' : 'cross-origin support'})`);
   console.log(`  - httpOnly: true`);
 }
 
@@ -309,10 +312,12 @@ const validateRequest = (fields) => {
 };
 
 // Middleware to ensure session is loaded in serverless environments
-// This is critical for serverless where sessions must be explicitly loaded from the store
+// This is critical for serverless (Vercel) where sessions must be explicitly loaded from the store
+// On traditional servers (Render), sessions are automatically available, so this is a no-op
 const ensureSessionLoaded = async (req, res, next) => {
-  // Only reload in production/serverless environments
-  if (isProduction && req.session && req.session.reload) {
+  // Only reload in serverless environments (Vercel), not on traditional servers (Render)
+  // On Render, sessions persist in the same process, so no reload needed
+  if (isVercel && req.session && req.session.reload) {
     try {
       // Reload session from store to ensure we have latest data
       // This is important in serverless where each request might hit a different instance
@@ -334,6 +339,7 @@ const ensureSessionLoaded = async (req, res, next) => {
       }
     }
   }
+  // On Render (traditional server), sessions are automatically available - no reload needed
   next();
 };
 
@@ -579,7 +585,7 @@ app.post('/api/logout', (req, res) => {
     res.clearCookie(sessionCookieName, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+      sameSite: (isVercel || isRender) ? 'lax' : (isProduction ? 'none' : 'lax'),
       path: '/',
       maxAge: 0 // Immediately expire the cookie
     });

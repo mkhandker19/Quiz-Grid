@@ -110,6 +110,7 @@ This application is deployed on **Render**.
 ## Screenshots
 
 ### Landing Page
+<img width="1919" height="945" alt="{37B62E0A-BD81-41A8-BE57-D65D3937BB0A}" src="https://github.com/user-attachments/assets/b6ea383d-533f-4dfe-94eb-962e24aea649" />
 
 ### Home Page
 Customize your quiz with category selection and question count.

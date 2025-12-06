@@ -20,8 +20,45 @@
 
     <script src="/js/navbar.js"></script>
     <script>
-        document.getElementById('startQuizBtn').addEventListener('click', () => {
-            window.location.href = '/quiz.html';
+        document.addEventListener('DOMContentLoaded', async function() {
+            const startQuizBtn = document.getElementById('startQuizBtn');
+            
+            startQuizBtn.addEventListener('click', async () => {
+                // Disable button to prevent multiple clicks
+                startQuizBtn.disabled = true;
+                startQuizBtn.textContent = 'Checking...';
+                
+                try {
+                    // Check authentication before navigating
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.status === 401) {
+                        // Not authenticated - redirect to login immediately
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.authenticated) {
+                        // User is authenticated - proceed to quiz
+                        window.location.href = '/quiz.html';
+                    } else {
+                        // Not authenticated - redirect to login
+                        window.location.href = '/login.html';
+                    }
+                } catch (error) {
+                    console.error('Auth check error:', error);
+                    // On error, redirect to login to be safe
+                    window.location.href = '/login.html';
+                } finally {
+                    // Re-enable button in case of delay
+                    startQuizBtn.disabled = false;
+                    startQuizBtn.textContent = 'Start Quiz';
+                }
+            });
         });
     </script>
 </body>

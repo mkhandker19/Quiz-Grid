@@ -6,14 +6,19 @@ class NavigationBar {
     }
 
     async init() {
-        await this.checkAuth();
+        // Render immediately with unauthenticated state to avoid delay
         this.render();
         this.attachEventListeners();
+        // Then check auth and update if needed
+        await this.checkAuth();
+        this.render(); // Re-render with correct auth state
     }
 
     async checkAuth() {
         try {
-            const response = await fetch('/api/auth/status');
+            const response = await fetch('/api/auth/status', {
+                credentials: 'include'
+            });
             
             if (response.status === 401) {
                 // User is not authenticated

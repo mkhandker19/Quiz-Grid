@@ -5,10 +5,21 @@ let totalQuestions = 0;
 
 async function initQuiz() {
     try {
-        const authResponse = await fetch('/api/auth/status');
+        // Check authentication first - redirect immediately if not authenticated
+        const authResponse = await fetch('/api/auth/status', {
+            credentials: 'include'
+        });
+        
+        if (authResponse.status === 401) {
+            // Not authenticated - redirect immediately
+            window.location.href = '/login.html';
+            return;
+        }
+        
         const authData = await authResponse.json();
         
         if (!authData.success || !authData.authenticated) {
+            // Not authenticated - redirect immediately
             window.location.href = '/login.html';
             return;
         }

@@ -239,6 +239,9 @@ function disableBackButtonProtection() {
     window.removeEventListener('beforeunload', handleBeforeUnload);
 }
 
+// Make function globally accessible so logout handler can disable protection
+window.disableBackButtonProtection = disableBackButtonProtection;
+
 // Function to show notification when fewer questions are available
 function showQuestionLimitNotification(requested, available) {
     // Remove any existing notifications

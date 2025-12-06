@@ -99,6 +99,12 @@ class NavigationBar {
                 e.preventDefault();
                 e.stopPropagation();
                 
+                // IMPORTANT: Disable quiz protection before logout to prevent "Leave site?" dialog
+                // This removes the beforeunload listener that triggers the browser warning
+                if (typeof window.disableBackButtonProtection === 'function') {
+                    window.disableBackButtonProtection();
+                }
+                
                 // Disable button to prevent multiple clicks
                 const originalText = logoutBtn.textContent;
                 logoutBtn.disabled = true;

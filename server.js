@@ -308,6 +308,35 @@ const validateRequest = (fields) => {
   };
 };
 
+// Middleware to ensure session is loaded in serverless environments
+// This is critical for serverless where sessions must be explicitly loaded from the store
+const ensureSessionLoaded = async (req, res, next) => {
+  // Only reload in production/serverless environments
+  if (isProduction && req.session && req.session.reload) {
+    try {
+      // Reload session from store to ensure we have latest data
+      // This is important in serverless where each request might hit a different instance
+      await new Promise((resolve) => {
+        req.session.reload((err) => {
+          if (err) {
+            // Log but don't fail - session might be new or store might be temporarily unavailable
+            if (isProduction) {
+              console.warn('Session reload warning (non-fatal):', err.message);
+            }
+          }
+          resolve();
+        });
+      });
+    } catch (reloadError) {
+      // Non-fatal - continue with existing session
+      if (isProduction) {
+        console.warn('Session reload error (non-fatal):', reloadError.message);
+      }
+    }
+  }
+  next();
+};
+
 // Hybrid Auth Middleware - Checks JWT first, then falls back to session
 // This ensures compatibility with both serverless (JWT) and traditional (session) environments
 const requireAuth = async (req, res, next) => {
@@ -900,7 +929,7 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
 });
 
 
-app.post('/api/quiz/answer', requireAuth, async (req, res, next) => {
+app.post('/api/quiz/answer', ensureSessionLoaded, requireAuth, async (req, res, next) => {
   try {
     // Enhanced session validation with better error logging
     if (!req.session) {
@@ -979,7 +1008,7 @@ app.post('/api/quiz/answer', requireAuth, async (req, res, next) => {
   }
 });
 
-app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
+app.post('/api/quiz/submit', ensureSessionLoaded, requireAuth, async (req, res, next) => {
   try {
     // Enhanced session validation with better error logging
     if (!req.session) {
@@ -990,6 +1019,8 @@ app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
       });
     }
     
+    // Session should already be reloaded by ensureSessionLoaded middleware
+    // Check if currentQuiz exists in the reloaded session
     if (!req.session.currentQuiz) {
       // Log additional context for debugging session issues
       const sessionInfo = {
@@ -997,7 +1028,8 @@ app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
         hasUserId: !!req.session.userId,
         hasCurrentQuiz: !!req.session.currentQuiz,
         hasQuizResults: !!req.session.quizResults,
-        authMethod: req.authMethod || 'unknown'
+        authMethod: req.authMethod || 'unknown',
+        sessionId: req.sessionID || 'no-id'
       };
       
       if (isProduction) {
@@ -1063,18 +1095,36 @@ app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
     
     // Explicitly save session to ensure changes are persisted (critical for serverless)
     // This ensures quizResults and currentQuiz changes are saved before response is sent
-    await new Promise((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) {
-          console.error('Error saving quiz submission to session:', err);
-          // Don't fail the request, but log the error
-          // The response will still be sent, but session might not be updated
-          resolve();
-        } else {
-          resolve();
-        }
+    // In serverless, this is essential as sessions must be explicitly saved
+    try {
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving quiz submission to session:', err);
+            // Log detailed error for debugging in production
+            if (isProduction) {
+              console.error('Session save error details:', {
+                error: err.message,
+                stack: err.stack,
+                sessionId: req.sessionID
+              });
+            }
+            // Don't fail the request, but log the error
+            // The response will still be sent, but session might not be updated
+            resolve();
+          } else {
+            if (!isProduction) {
+              console.log('Session saved successfully for quiz submission');
+            }
+            resolve();
+          }
+        });
       });
-    });
+    } catch (saveError) {
+      // Catch any unexpected errors during save
+      console.error('Unexpected error during session save:', saveError);
+      // Continue anyway - quiz results are still returned to user
+    }
 
     try {
       const user = await User.findById(req.user.id);

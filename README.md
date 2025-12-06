@@ -109,6 +109,8 @@ This application is deployed on **Render**.
 
 ## Screenshots
 
+### Landing Page
+
 ### Home Page
 Customize your quiz with category selection and question count.
 

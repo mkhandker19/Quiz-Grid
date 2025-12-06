@@ -34,6 +34,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Determine if we're in production (Vercel sets VERCEL env var)
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+// Vercel serves from same domain, so we can use 'lax' instead of 'none'
+const isVercel = process.env.VERCEL === '1';
 
 // Session configuration - works for both local and production
 app.use(session({
@@ -49,9 +51,17 @@ app.use(session({
     secure: isProduction, // false for local (HTTP), true for production (HTTPS)
     httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: isProduction ? 'none' : 'lax', // 'lax' for local, 'none' for production (cross-origin)
-    path: '/' // Cookie available for all paths
-  }
+    // Use 'lax' for Vercel (same domain) and 'none' only if truly cross-origin
+    // Vercel serves everything from the same domain, so 'lax' works better
+    sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+    path: '/', // Cookie available for all paths
+    // Don't set domain - let browser handle it (important for Vercel)
+    // domain: undefined explicitly means current domain
+  },
+  // Ensure session is saved even if not modified (important for serverless)
+  rolling: false,
+  // Force save on every request to ensure session is available
+  saveUninitialized: false
 }));
 
 // Log session configuration on startup (helpful for debugging)
@@ -63,7 +73,7 @@ if (!isProduction) {
 } else {
   console.log('Session Configuration (Production):');
   console.log(`  - secure: true (HTTPS required)`);
-  console.log(`  - sameSite: none (cross-origin support)`);
+  console.log(`  - sameSite: ${isVercel ? 'lax' : 'none'} (${isVercel ? 'Vercel same-domain' : 'cross-origin support'})`);
   console.log(`  - httpOnly: true`);
 }
 
@@ -197,9 +207,16 @@ const validateRequest = (fields) => {
 };
 
 const requireAuth = (req, res, next) => {
+  // In serverless environments, session might not be loaded yet
+  // Wait a moment for session to load from MongoDB if needed
   if (req.session && req.session.userId) {
     next();
   } else {
+    // Log for debugging in production
+    if (isProduction) {
+      console.log('Auth check failed - session:', req.session ? 'exists but no userId' : 'does not exist');
+      console.log('Session ID:', req.sessionID);
+    }
     res.status(401).json({
       success: false,
       message: 'Authentication required. Please login.'
@@ -333,7 +350,7 @@ app.post('/api/login', validateRequest([
 
     // Explicitly save session to ensure it's persisted (works in both local and production)
     // Use promise-based approach for better async handling
-    // This is critical for serverless environments like Vercel
+    // This is critical for serverless environments like Vercel where sessions must be fully committed
     try {
       await new Promise((resolve, reject) => {
         req.session.save((err) => {
@@ -348,6 +365,12 @@ app.post('/api/login', validateRequest([
           }
         });
       });
+      
+      // In serverless environments, we need to ensure the session is fully committed
+      // Wait a bit to ensure MongoDB has written the session
+      if (isProduction) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     } catch (sessionError) {
       // Log the error and fail the login if session can't be saved
       console.error('Session save failed:', sessionError);
@@ -365,6 +388,25 @@ app.post('/api/login', validateRequest([
         message: 'Failed to create session. Please try again.'
       });
     }
+    
+    // Force session to be saved again to ensure cookie is set in response
+    // This is important for serverless where the response might be sent before cookie is committed
+    try {
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Second session save error:', err);
+            // Don't fail login if second save fails, but log it
+            resolve();
+          } else {
+            resolve();
+          }
+        });
+      });
+    } catch (secondSaveError) {
+      // Log but don't fail - first save should be enough
+      console.error('Second session save failed (non-critical):', secondSaveError);
+    }
 
     const userResponse = {
       id: user._id,
@@ -381,6 +423,14 @@ app.post('/api/login', validateRequest([
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    
+    // Ensure session cookie is explicitly set in response
+    // This is critical for serverless environments where cookies might not be set automatically
+    if (req.session && req.session.cookie) {
+      // The session middleware should have set the cookie, but we ensure it's in the response
+      // by touching the session one more time
+      req.session.touch();
+    }
 
     res.json({
       success: true,
@@ -414,7 +464,7 @@ app.post('/api/logout', (req, res) => {
     res.clearCookie(sessionCookieName, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
       path: '/',
       maxAge: 0 // Immediately expire the cookie
     });

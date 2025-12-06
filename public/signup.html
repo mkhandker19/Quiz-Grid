@@ -294,13 +294,12 @@
                     console.log('Error message:', data.message); // Debug log
                     
                     if (data.success) {
-                        // Show success message in the existing error container
-                        errorContainer.textContent = 'Account created successfully! Redirecting to login...';
-                        errorContainer.className = 'success-message';
-                        errorContainer.style.display = 'block';
+                        // Show green success notification (similar to logout notification)
+                        showSignupNotification('Account created successfully!', 'success');
+                        // Redirect to login after showing notification
                         setTimeout(() => {
                             window.location.href = '/login.html';
-                        }, 1500);
+                        }, 2000);
                     } else {
                         // Check if it's the duplicate username/email error
                         // Check both the message content and status code

@@ -348,10 +348,11 @@
                     
                     // Check if response is ok and data indicates success
                     if (response.ok && data && data.success) {
-                        // Success - small delay to ensure session cookie is set before redirect
+                        // Success - longer delay to ensure session cookie is set before redirect
+                        // This is especially important in production/serverless environments
                         setTimeout(() => {
                             window.location.href = '/index.html';
-                        }, 100);
+                        }, 500);
                     } else {
                         // Show red notification for wrong credentials (similar to logout notification)
                         showLoginNotification('Wrong Email/Username or Password. Please try again.', 'error');

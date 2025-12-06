@@ -333,6 +333,7 @@ app.post('/api/login', validateRequest([
 
     // Explicitly save session to ensure it's persisted (works in both local and production)
     // Use promise-based approach for better async handling
+    // This is critical for serverless environments like Vercel
     try {
       await new Promise((resolve, reject) => {
         req.session.save((err) => {
@@ -348,10 +349,12 @@ app.post('/api/login', validateRequest([
         });
       });
     } catch (sessionError) {
-      // Log the error but don't fail the login - session might still work
-      console.error('Session save failed, but continuing with login:', sessionError);
-      // The session data is already set, so we'll proceed
-      // In some cases, the session might still work even if save callback fails
+      // Log the error and fail the login if session can't be saved
+      console.error('Session save failed:', sessionError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create session. Please try again.'
+      });
     }
 
     // Verify session was set
@@ -373,6 +376,11 @@ app.post('/api/login', validateRequest([
       console.log('Sending login success response for user:', user.username);
       console.log('Session userId:', req.session.userId);
     }
+
+    // Set explicit headers to ensure cookie is sent and not cached in production
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     res.json({
       success: true,

@@ -88,6 +88,75 @@
             
             checkAuth();
 
+            // Function to show notification (similar to login notification style)
+            function showSignupNotification(message, type = 'error') {
+                // Remove any existing notifications
+                const existingNotification = document.getElementById('signup-notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
+
+                // Create notification element with all styles applied before appending
+                const notification = document.createElement('div');
+                notification.id = 'signup-notification';
+                notification.className = type === 'success' ? 'success-message' : 'error-message';
+                notification.textContent = message;
+                
+                // Apply base styles before appending (completely hidden)
+                Object.assign(notification.style, {
+                    position: 'fixed',
+                    top: '80px',
+                    zIndex: '9999',
+                    minWidth: '300px',
+                    maxWidth: '90%',
+                    textAlign: 'center',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                    opacity: '0',
+                    transition: 'opacity 0.2s ease-in',
+                    visibility: 'hidden',
+                    display: 'block',
+                    left: '0px' // Temporary, will be recalculated
+                });
+
+                // Append to DOM while hidden
+                document.body.appendChild(notification);
+                
+                // Force layout calculation while still hidden
+                void notification.offsetWidth;
+                void notification.offsetHeight;
+                
+                // Get the actual width
+                const width = notification.offsetWidth || 300;
+                
+                // Calculate exact center position BEFORE making visible
+                const leftPosition = Math.max(0, (window.innerWidth - width) / 2);
+                notification.style.left = leftPosition + 'px';
+                
+                // Now make it visible - position is already set correctly
+                notification.style.visibility = 'visible';
+                
+                // Force one more reflow to ensure position is applied
+                void notification.offsetHeight;
+                
+                // Fade in smoothly
+                requestAnimationFrame(() => {
+                    notification.style.opacity = '1';
+                });
+
+                // Auto-remove after 3 seconds
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.style.opacity = '0';
+                        notification.style.transition = 'opacity 0.3s ease-out';
+                        setTimeout(() => {
+                            if (notification.parentNode) {
+                                notification.remove();
+                            }
+                        }, 300);
+                    }
+                }, 3000);
+            }
+
             const togglePassword = document.getElementById('togglePassword');
             const passwordInput = document.getElementById('password');
             const eyeIcon = document.getElementById('eyeIcon');
@@ -222,6 +291,7 @@
                     console.log('Response status:', response.status); // Debug log
                     const data = await response.json();
                     console.log('Response data:', data); // Debug log
+                    console.log('Error message:', data.message); // Debug log
                     
                     if (data.success) {
                         // Show success message in the existing error container
@@ -232,10 +302,22 @@
                             window.location.href = '/login.html';
                         }, 1500);
                     } else {
-                        // Show error message
-                        errorContainer.textContent = data.message || 'Signup failed. Please try again.';
-                        errorContainer.className = 'error-message';
-                        errorContainer.style.display = 'block';
+                        // Check if it's the duplicate username/email error
+                        // Check both the message content and status code
+                        const errorMessage = (data.message || '').toLowerCase();
+                        const isDuplicateError = errorMessage.includes('username or email already exist') || 
+                                                errorMessage.includes('already exist');
+                        
+                        if (isDuplicateError || (response.status === 400 && errorMessage)) {
+                            // Show red notification like login error
+                            console.log('Showing notification for duplicate username/email'); // Debug log
+                            showSignupNotification('Username or Email already exist.', 'error');
+                        } else {
+                            // Show other errors in the error container
+                            errorContainer.textContent = data.message || 'Signup failed. Please try again.';
+                            errorContainer.className = 'error-message';
+                            errorContainer.style.display = 'block';
+                        }
                     }
                 } catch (error) {
                     console.error('Signup error:', error);

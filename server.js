@@ -255,18 +255,10 @@ app.post('/api/signup', validateRequest([
     });
 
     if (existingUser) {
-      if (existingUser.email === email.toLowerCase()) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'An account with this email already exists. Please use a different email or try logging in.' 
-        });
-      }
-      if (existingUser.username === username.trim()) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'This username is already taken. Please choose a different username.' 
-        });
-      }
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Username or Email already exist.' 
+      });
     }
 
     
@@ -937,8 +929,9 @@ if (require.main === module) {
       console.error(`  1. Stop the other process using port ${PORT}`);
       console.error(`  2. Set PORT environment variable to use a different port (e.g., PORT=3001)`);
       console.error(`\nTo find what's using port ${PORT}, run:`);
-      console.error(`  Windows: netstat -ano | findstr :${PORT}`);
-      console.error(`  Mac/Linux: lsof -i :${PORT}\n`);
+      console.error(`  Windows CMD: netstat -ano | findstr :${PORT}`);
+      console.error(`  Windows PowerShell: netstat -ano | Select-String :${PORT}`);
+      console.error(`  Git Bash/Mac/Linux: lsof -i :${PORT} or netstat -ano | grep :${PORT}\n`);
       process.exit(1);
     } else {
       throw err;

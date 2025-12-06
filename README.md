@@ -6,6 +6,16 @@ A full-featured quiz application with user authentication, real-time scoring, an
 
 **[https://quiz-grid.onrender.com](https://quiz-grid.onrender.com)**
 
+## Team Members
+
+| Name | Role |
+|------|------|
+| Mahin Khandker | Full Stack Developer |
+
+### Contributions
+
+- **Mahin Khandker**: Sole developer responsible for all aspects of the project including backend API development, database design, frontend UI/UX, user authentication, Trivia API integration, and deployment.
+
 ## Features
 
 ### User Authentication

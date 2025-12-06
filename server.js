@@ -6,6 +6,8 @@ const session = require('express-session');
 const MongoStoreModule = require('connect-mongo');
 const MongoStore = MongoStoreModule.default || MongoStoreModule.MongoStore || MongoStoreModule;
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const connectDB = require('./config/database');
 const User = require('./models/User');
 const { getAllQuestions, getQuestionsExcludingUsed, getCategories } = require('./utils/questions');
@@ -31,20 +33,106 @@ const ensureDBConnection = async (req, res, next) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // Required to parse JWT cookies
 
 // Determine if we're in production (Vercel sets VERCEL env var)
 const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 // Vercel serves from same domain, so we can use 'lax' instead of 'none'
 const isVercel = process.env.VERCEL === '1';
 
-// Session configuration - works for both local and production
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'quiz-grid-jwt-secret-change-in-production';
+const JWT_EXPIRES_IN = '24h'; // 24 hours, matching session maxAge
+const JWT_COOKIE_NAME = 'quiz-grid-token';
+
+// JWT Utility Functions
+const jwtUtils = {
+  // Generate JWT token
+  generateToken: (user) => {
+    const payload = {
+      id: user._id.toString(),
+      username: user.username,
+      email: user.email
+    };
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  },
+
+  // Verify JWT token
+  verifyToken: (token) => {
+    try {
+      return jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      return null;
+    }
+  },
+
+  // Set JWT cookie in response
+  setTokenCookie: (res, token) => {
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+      path: '/',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    };
+    res.cookie(JWT_COOKIE_NAME, token, cookieOptions);
+  },
+
+  // Clear JWT cookie
+  clearTokenCookie: (res) => {
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isVercel ? 'lax' : (isProduction ? 'none' : 'lax'),
+      path: '/',
+      maxAge: 0
+    };
+    res.clearCookie(JWT_COOKIE_NAME, cookieOptions);
+  }
+};
+
+// Ensure database connection is available before session middleware
+// This is critical for serverless where each request might need a fresh connection
+app.use(async (req, res, next) => {
+  try {
+    if (!dbConnectionPromise) {
+      dbConnectionPromise = connectDB();
+    }
+    await dbConnectionPromise;
+    next();
+  } catch (error) {
+    console.error('Database connection error in middleware:', error);
+    // Don't block requests, but log the error
+    // Session store has its own connection, so this is just for our app DB
+    next();
+  }
+});
+
+// Session configuration - optimized for serverless (Vercel)
+// MongoStore creates its own MongoDB connection
+// We ensure it's properly configured with connection options for serverless reliability
+const sessionStore = MongoStore.create({
+  mongoUrl: process.env.MONGODB_URI,
+  touchAfter: 24 * 3600,
+  ttl: 24 * 60 * 60,
+  collectionName: 'sessions',
+  autoRemove: 'native',
+  stringify: false,
+  // Connection options for serverless - ensures reliable connection
+  // These match the options we use for the main DB connection
+  mongoOptions: {
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
+  },
+  errorHandler: (error) => {
+    console.error('MongoStore error:', error);
+  }
+});
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    touchAfter: 24 * 3600,
-    ttl: 24 * 60 * 60,
-  }),
+  store: sessionStore,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -78,7 +166,14 @@ if (!isProduction) {
 }
 
 // Middleware to redirect authenticated users away from login/signup
-const redirectIfAuthenticated = (req, res, next) => {
+// Checks both JWT and session
+const redirectIfAuthenticated = async (req, res, next) => {
+  // Check JWT first
+  const token = req.cookies[JWT_COOKIE_NAME];
+  if (token && jwtUtils.verifyToken(token)) {
+    return res.redirect('/index.html');
+  }
+  // Check session
   if (req.session && req.session.userId) {
     return res.redirect('/index.html');
   }
@@ -86,7 +181,14 @@ const redirectIfAuthenticated = (req, res, next) => {
 };
 
 // Middleware to redirect unauthenticated users to login
-const redirectIfNotAuthenticated = (req, res, next) => {
+// Checks both JWT and session
+const redirectIfNotAuthenticated = async (req, res, next) => {
+  // Check JWT first
+  const token = req.cookies[JWT_COOKIE_NAME];
+  if (token && jwtUtils.verifyToken(token)) {
+    return next();
+  }
+  // Check session
   if (req.session && req.session.userId) {
     next();
   } else {
@@ -206,22 +308,45 @@ const validateRequest = (fields) => {
   };
 };
 
-const requireAuth = (req, res, next) => {
-  // In serverless environments, session might not be loaded yet
-  // Wait a moment for session to load from MongoDB if needed
-  if (req.session && req.session.userId) {
-    next();
-  } else {
-    // Log for debugging in production
-    if (isProduction) {
-      console.log('Auth check failed - session:', req.session ? 'exists but no userId' : 'does not exist');
-      console.log('Session ID:', req.sessionID);
+// Hybrid Auth Middleware - Checks JWT first, then falls back to session
+// This ensures compatibility with both serverless (JWT) and traditional (session) environments
+const requireAuth = async (req, res, next) => {
+  // Try JWT authentication first (better for serverless)
+  const token = req.cookies[JWT_COOKIE_NAME];
+  
+  if (token) {
+    const decoded = jwtUtils.verifyToken(token);
+    if (decoded) {
+      // JWT is valid - attach user info to request
+      req.user = {
+        id: decoded.id,
+        username: decoded.username,
+        email: decoded.email
+      };
+      req.authMethod = 'jwt';
+      return next();
     }
-    res.status(401).json({
-      success: false,
-      message: 'Authentication required. Please login.'
-    });
   }
+
+  // Fall back to session authentication
+  if (req.session && req.session.userId) {
+    req.user = {
+      id: req.session.userId,
+      username: req.session.username,
+      email: req.session.email
+    };
+    req.authMethod = 'session';
+    return next();
+  }
+
+  // No valid authentication found
+  if (isProduction) {
+    console.log('Auth check failed - JWT:', token ? 'invalid' : 'missing', 'Session:', req.session ? 'exists but no userId' : 'does not exist');
+  }
+  res.status(401).json({
+    success: false,
+    message: 'Authentication required. Please login.'
+  });
 };
 
 
@@ -344,19 +469,23 @@ app.post('/api/login', validateRequest([
       });
     }
 
+    // Generate JWT token (primary auth method for serverless)
+    const token = jwtUtils.generateToken(user);
+    
+    // Also set session as backup (for compatibility)
     req.session.userId = user._id.toString();
     req.session.username = user.username;
     req.session.email = user.email;
 
-    // Explicitly save session to ensure it's persisted (works in both local and production)
-    // Use promise-based approach for better async handling
-    // This is critical for serverless environments like Vercel where sessions must be fully committed
+    // Try to save session (non-blocking - JWT is primary)
+    // This is a fallback for environments that prefer sessions
     try {
       await new Promise((resolve, reject) => {
         req.session.save((err) => {
           if (err) {
-            console.error('Session save error:', err);
-            reject(err);
+            console.error('Session save error (non-critical, JWT is primary):', err);
+            // Don't fail login if session save fails - JWT will work
+            resolve();
           } else {
             if (!isProduction) {
               console.log('Session saved successfully for user:', user.username);
@@ -365,47 +494,9 @@ app.post('/api/login', validateRequest([
           }
         });
       });
-      
-      // In serverless environments, we need to ensure the session is fully committed
-      // Wait a bit to ensure MongoDB has written the session
-      if (isProduction) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
     } catch (sessionError) {
-      // Log the error and fail the login if session can't be saved
-      console.error('Session save failed:', sessionError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to create session. Please try again.'
-      });
-    }
-
-    // Verify session was set
-    if (!req.session.userId) {
-      console.error('Session userId not set after login attempt');
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to create session. Please try again.'
-      });
-    }
-    
-    // Force session to be saved again to ensure cookie is set in response
-    // This is important for serverless where the response might be sent before cookie is committed
-    try {
-      await new Promise((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Second session save error:', err);
-            // Don't fail login if second save fails, but log it
-            resolve();
-          } else {
-            resolve();
-          }
-        });
-      });
-    } catch (secondSaveError) {
-      // Log but don't fail - first save should be enough
-      console.error('Second session save failed (non-critical):', secondSaveError);
+      // Log but don't fail - JWT is the primary auth method
+      console.error('Session save failed (non-critical):', sessionError);
     }
 
     const userResponse = {
@@ -419,18 +510,13 @@ app.post('/api/login', validateRequest([
       console.log('Session userId:', req.session.userId);
     }
 
+    // Set JWT token in cookie (primary auth method)
+    jwtUtils.setTokenCookie(res, token);
+
     // Set explicit headers to ensure cookie is sent and not cached in production
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    
-    // Ensure session cookie is explicitly set in response
-    // This is critical for serverless environments where cookies might not be set automatically
-    if (req.session && req.session.cookie) {
-      // The session middleware should have set the cookie, but we ensure it's in the response
-      // by touching the session one more time
-      req.session.touch();
-    }
 
     res.json({
       success: true,
@@ -482,20 +568,22 @@ app.get('/api/auth/status', requireAuth, (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   
+  // Use req.user which is set by requireAuth middleware (works for both JWT and session)
   res.json({
     success: true,
     authenticated: true,
+    authMethod: req.authMethod || 'unknown', // 'jwt' or 'session'
     user: {
-      id: req.session.userId,
-      username: req.session.username,
-      email: req.session.email
+      id: req.user.id,
+      username: req.user.username,
+      email: req.user.email
     }
   });
 });
 
 app.get('/api/user/profile', requireAuth, async (req, res, next) => {
   try {
-    const user = await User.findById(req.session.userId).select('-password');
+    const user = await User.findById(req.user.id).select('-password');
     
     if (!user) {
       return res.status(404).json({
@@ -573,8 +661,8 @@ app.get('/api/leaderboard', requireAuth, async (req, res, next) => {
     let currentUserRank = null;
     let currentUserData = null;
     
-    if (req.session.userId) {
-      const currentUser = await User.findById(req.session.userId);
+    if (req.user && req.user.id) {
+      const currentUser = await User.findById(req.user.id);
       if (currentUser) {
         const currentUserBestScore = currentUser.getBestScore();
         const currentUserAvgScore = currentUser.getAverageScore();
@@ -897,7 +985,7 @@ app.post('/api/quiz/submit', requireAuth, async (req, res, next) => {
     req.session.currentQuiz = null;
 
     try {
-      const user = await User.findById(req.session.userId);
+      const user = await User.findById(req.user.id);
       if (user) {
         user.quizAttempts.push({
           score: score,
@@ -934,7 +1022,7 @@ app.post('/api/quiz/save', requireAuth, async (req, res, next) => {
     }
 
     const quizResults = req.session.quizResults;
-    const user = await User.findById(req.session.userId);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({

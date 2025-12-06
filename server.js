@@ -14,6 +14,11 @@ const { getAllQuestions, getQuestionsExcludingUsed, getCategories } = require('.
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CRITICAL: Trust proxy - required for secure cookies behind reverse proxy (Render, Heroku, etc.)
+// Without this, Express sees HTTP requests (proxy terminates SSL) and won't set secure cookies
+// This MUST be set before any middleware that uses cookies/sessions
+app.set('trust proxy', 1);
+
 let dbConnectionPromise = null;
 const ensureDBConnection = async (req, res, next) => {
   try {
@@ -166,36 +171,20 @@ app.use(session({
   rolling: false
 }));
 
-// Middleware to log session state for debugging (after session middleware)
-if (isProduction) {
-  app.use((req, res, next) => {
-    // Log session state after session middleware has loaded it
-    if (req.session) {
-      console.log('Session state after load:', {
-        sessionId: req.sessionID,
-        hasUserId: !!req.session.userId,
-        hasCurrentQuiz: !!req.session.currentQuiz,
-        cookiePresent: !!req.cookies['connect.sid']
-      });
-    } else {
-      console.log('No session object found');
-    }
-    next();
-  });
-}
-
 // Log session configuration on startup (helpful for debugging)
 if (!isProduction) {
   console.log('Session Configuration (Local):');
   console.log(`  - secure: false (HTTP allowed)`);
   console.log(`  - sameSite: lax (works with localhost)`);
   console.log(`  - httpOnly: true`);
+  console.log(`  - trust proxy: enabled`);
 } else {
   const platform = isVercel ? 'Vercel' : (isRender ? 'Render' : 'Production');
   console.log(`Session Configuration (${platform}):`);
   console.log(`  - secure: true (HTTPS required)`);
   console.log(`  - sameSite: ${(isVercel || isRender) ? 'lax' : 'none'} (${(isVercel || isRender) ? 'same-domain' : 'cross-origin support'})`);
   console.log(`  - httpOnly: true`);
+  console.log(`  - trust proxy: enabled (required for reverse proxy)`);
 }
 
 // Middleware to redirect authenticated users away from login/signup
@@ -342,47 +331,11 @@ const validateRequest = (fields) => {
 };
 
 // Middleware to ensure session is loaded from MongoDB store
-// This is critical because even on traditional servers (Render), sessions stored in MongoDB
-// need to be explicitly reloaded to get the latest data from the database
+// On Render with trust proxy enabled, sessions should work correctly
+// This middleware is kept for compatibility but may not be needed
 const ensureSessionLoaded = async (req, res, next) => {
-  // Log session cookie info for debugging
-  const sessionCookie = req.cookies['connect.sid'];
-  if (isProduction && sessionCookie) {
-    console.log('Session cookie received:', sessionCookie.substring(0, 20) + '...');
-  }
-  
-  // Reload session from MongoDB store to ensure we have latest data
-  // This is important because sessions are stored in MongoDB, not in-memory
-  // Even on Render, we need to reload from the database to get the latest session state
-  if (req.session && req.session.reload) {
-    try {
-      await new Promise((resolve) => {
-        req.session.reload((err) => {
-          if (err) {
-            // Log but don't fail - session might be new or store might be temporarily unavailable
-            // Only log in production to avoid spam
-            if (isProduction && err.code !== 'ENOENT') {
-              // ENOENT means session doesn't exist yet, which is normal for new sessions
-              console.warn('Session reload warning (non-fatal):', err.message, 'Session ID:', req.sessionID);
-            }
-          } else {
-            // Log successful reload
-            if (isProduction) {
-              console.log('Session reloaded successfully. Session ID:', req.sessionID);
-            }
-          }
-          resolve();
-        });
-      });
-    } catch (reloadError) {
-      // Non-fatal - continue with existing session
-      if (isProduction) {
-        console.warn('Session reload error (non-fatal):', reloadError.message);
-      }
-    }
-  } else if (isProduction && req.session) {
-    console.log('New session created. Session ID:', req.sessionID);
-  }
+  // Sessions are managed by express-session and MongoStore
+  // With trust proxy enabled, cookies should be sent and received correctly
   next();
 };
 
@@ -946,37 +899,15 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
     // Explicitly save session to ensure quiz data is persisted
     // This is critical for serverless environments where sessions must be explicitly saved
     // Also important on Render to ensure MongoDB session store is updated
-    try {
-      await new Promise((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Error saving quiz session:', err);
-            console.error('Session save error details:', {
-              error: err.message,
-              sessionId: req.sessionID,
-              hasCurrentQuiz: !!req.session.currentQuiz,
-              hasUserId: !!req.session.userId
-            });
-            reject(err);
-          } else {
-            // Log successful save for debugging
-            if (isProduction) {
-              console.log('Quiz session saved successfully:', {
-                sessionId: req.sessionID,
-                hasCurrentQuiz: !!req.session.currentQuiz,
-                questionCount: req.session.currentQuiz?.questions?.length || 0,
-                hasUserId: !!req.session.userId
-              });
-            }
-            resolve();
-          }
-        });
+    // Save session to ensure quiz data is persisted
+    await new Promise((resolve) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving quiz session:', err.message);
+        }
+        resolve();
       });
-    } catch (saveError) {
-      console.error('Failed to save quiz session:', saveError);
-      // Don't fail the request, but log the error
-      // The quiz will still be returned, but might not persist
-    }
+    });
 
     // Verify we got the correct number of questions
     if (selectedQuestions.length !== validAmount) {
@@ -1026,27 +957,6 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
       }
     }
 
-    // Ensure session cookie is set in response
-    // This is critical - the cookie must be set for subsequent requests to use the same session
-    if (req.session && req.sessionID) {
-      // Touch session to ensure it's marked as modified
-      req.session.touch();
-      
-      // Save session one more time before sending response to ensure cookie is set
-      await new Promise((resolve) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Error saving session before quiz start response:', err);
-          } else {
-            if (isProduction) {
-              console.log('Session saved before response. Session ID:', req.sessionID);
-            }
-          }
-          resolve();
-        });
-      });
-    }
-    
     res.json({
       success: true,
       questions: formattedQuestions,
@@ -1076,43 +986,8 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
 
 app.post('/api/quiz/answer', ensureSessionLoaded, requireAuth, async (req, res, next) => {
   try {
-    // Enhanced session validation with better error logging
-    if (!req.session) {
-      console.error('Session object is missing in /api/quiz/answer');
-      return res.status(400).json({
-        success: false,
-        message: 'Session not available. Please start a quiz first.'
-      });
-    }
-    
-    // Log session state for debugging
-    if (isProduction && !req.session.currentQuiz) {
-      console.log('Quiz answer - Session state:', {
-        sessionId: req.sessionID,
-        hasSession: !!req.session,
-        hasUserId: !!req.session.userId,
-        hasCurrentQuiz: !!req.session.currentQuiz,
-        hasUsedQuestionIds: !!req.session.usedQuestionIds,
-        authMethod: req.authMethod || 'unknown'
-      });
-    }
-    
-    if (!req.session.currentQuiz) {
-      // Log additional context for debugging session issues
-      const sessionInfo = {
-        hasSession: !!req.session,
-        hasUserId: !!req.session.userId,
-        hasCurrentQuiz: !!req.session.currentQuiz,
-        authMethod: req.authMethod || 'unknown',
-        sessionId: req.sessionID
-      };
-      
-      if (isProduction) {
-        console.error('Quiz answer failed - no currentQuiz in session:', sessionInfo);
-      } else {
-        console.warn('Quiz answer failed - no currentQuiz in session:', sessionInfo);
-      }
-      
+    if (!req.session || !req.session.currentQuiz) {
+      console.error('Quiz answer failed - no currentQuiz. Session ID:', req.sessionID);
       return res.status(400).json({
         success: false,
         message: 'No active quiz session. Please start a quiz first.'
@@ -1168,34 +1043,8 @@ app.post('/api/quiz/answer', ensureSessionLoaded, requireAuth, async (req, res, 
 
 app.post('/api/quiz/submit', ensureSessionLoaded, requireAuth, async (req, res, next) => {
   try {
-    // Enhanced session validation with better error logging
-    if (!req.session) {
-      console.error('Session object is missing in /api/quiz/submit');
-      return res.status(400).json({
-        success: false,
-        message: 'Session not available. Please start a quiz first.'
-      });
-    }
-    
-    // Session should already be reloaded by ensureSessionLoaded middleware
-    // Check if currentQuiz exists in the reloaded session
-    if (!req.session.currentQuiz) {
-      // Log additional context for debugging session issues
-      const sessionInfo = {
-        hasSession: !!req.session,
-        hasUserId: !!req.session.userId,
-        hasCurrentQuiz: !!req.session.currentQuiz,
-        hasQuizResults: !!req.session.quizResults,
-        authMethod: req.authMethod || 'unknown',
-        sessionId: req.sessionID || 'no-id'
-      };
-      
-      if (isProduction) {
-        console.error('Quiz submission failed - no currentQuiz in session:', sessionInfo);
-      } else {
-        console.warn('Quiz submission failed - no currentQuiz in session:', sessionInfo);
-      }
-      
+    if (!req.session || !req.session.currentQuiz) {
+      console.error('Quiz submission failed - no currentQuiz. Session ID:', req.sessionID);
       return res.status(400).json({
         success: false,
         message: 'No active quiz session. Please start a quiz first.'

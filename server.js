@@ -114,12 +114,12 @@ app.use(async (req, res, next) => {
 // We ensure it's properly configured with connection options for serverless reliability
 const sessionStore = MongoStore.create({
   mongoUrl: process.env.MONGODB_URI,
-  touchAfter: 24 * 3600,
-  ttl: 24 * 60 * 60,
+  touchAfter: 24 * 3600, // Don't update session in DB if it was touched less than 24 hours ago
+  ttl: 24 * 60 * 60, // Session expires after 24 hours
   collectionName: 'sessions',
   autoRemove: 'native',
-  stringify: false,
-  // Connection options for serverless - ensures reliable connection
+  stringify: false, // Store as BSON for better performance
+  // Connection options for reliable connection
   // These match the options we use for the main DB connection
   mongoOptions: {
     serverSelectionTimeoutMS: 10000,
@@ -131,11 +131,24 @@ const sessionStore = MongoStore.create({
   }
 });
 
+// Log when session store is ready
+sessionStore.on('create', (sessionId) => {
+  if (!isProduction) {
+    console.log('Session created:', sessionId);
+  }
+});
+
+sessionStore.on('destroy', (sessionId) => {
+  if (!isProduction) {
+    console.log('Session destroyed:', sessionId);
+  }
+});
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'quiz-grid-secret-key-change-in-production',
   store: sessionStore,
-  resave: false,
-  saveUninitialized: false,
+  resave: true, // Force save even if session wasn't modified - important for MongoDB store
+  saveUninitialized: false, // Don't save uninitialized sessions
     cookie: {
       secure: isProduction, // false for local (HTTP), true for production (HTTPS)
       httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
@@ -311,21 +324,22 @@ const validateRequest = (fields) => {
   };
 };
 
-// Middleware to ensure session is loaded in serverless environments
-// This is critical for serverless (Vercel) where sessions must be explicitly loaded from the store
-// On traditional servers (Render), sessions are automatically available, so this is a no-op
+// Middleware to ensure session is loaded from MongoDB store
+// This is critical because even on traditional servers (Render), sessions stored in MongoDB
+// need to be explicitly reloaded to get the latest data from the database
 const ensureSessionLoaded = async (req, res, next) => {
-  // Only reload in serverless environments (Vercel), not on traditional servers (Render)
-  // On Render, sessions persist in the same process, so no reload needed
-  if (isVercel && req.session && req.session.reload) {
+  // Reload session from MongoDB store to ensure we have latest data
+  // This is important because sessions are stored in MongoDB, not in-memory
+  // Even on Render, we need to reload from the database to get the latest session state
+  if (req.session && req.session.reload) {
     try {
-      // Reload session from store to ensure we have latest data
-      // This is important in serverless where each request might hit a different instance
       await new Promise((resolve) => {
         req.session.reload((err) => {
           if (err) {
             // Log but don't fail - session might be new or store might be temporarily unavailable
-            if (isProduction) {
+            // Only log in production to avoid spam
+            if (isProduction && err.code !== 'ENOENT') {
+              // ENOENT means session doesn't exist yet, which is normal for new sessions
               console.warn('Session reload warning (non-fatal):', err.message);
             }
           }
@@ -339,7 +353,6 @@ const ensureSessionLoaded = async (req, res, next) => {
       }
     }
   }
-  // On Render (traditional server), sessions are automatically available - no reload needed
   next();
 };
 
@@ -897,18 +910,43 @@ app.get('/api/quiz/start', requireAuth, async (req, res, next) => {
       startTime: new Date()
     };
     
+    // Mark session as modified to ensure it's saved
+    req.session.touch();
+    
     // Explicitly save session to ensure quiz data is persisted
     // This is critical for serverless environments where sessions must be explicitly saved
-    await new Promise((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) {
-          console.error('Error saving quiz session:', err);
-          reject(err);
-        } else {
-          resolve();
-        }
+    // Also important on Render to ensure MongoDB session store is updated
+    try {
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving quiz session:', err);
+            console.error('Session save error details:', {
+              error: err.message,
+              sessionId: req.sessionID,
+              hasCurrentQuiz: !!req.session.currentQuiz,
+              hasUserId: !!req.session.userId
+            });
+            reject(err);
+          } else {
+            // Log successful save for debugging
+            if (isProduction) {
+              console.log('Quiz session saved successfully:', {
+                sessionId: req.sessionID,
+                hasCurrentQuiz: !!req.session.currentQuiz,
+                questionCount: req.session.currentQuiz?.questions?.length || 0,
+                hasUserId: !!req.session.userId
+              });
+            }
+            resolve();
+          }
+        });
       });
-    });
+    } catch (saveError) {
+      console.error('Failed to save quiz session:', saveError);
+      // Don't fail the request, but log the error
+      // The quiz will still be returned, but might not persist
+    }
 
     // Verify we got the correct number of questions
     if (selectedQuestions.length !== validAmount) {
@@ -996,13 +1034,26 @@ app.post('/api/quiz/answer', ensureSessionLoaded, requireAuth, async (req, res, 
       });
     }
     
+    // Log session state for debugging
+    if (isProduction && !req.session.currentQuiz) {
+      console.log('Quiz answer - Session state:', {
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        hasUserId: !!req.session.userId,
+        hasCurrentQuiz: !!req.session.currentQuiz,
+        hasUsedQuestionIds: !!req.session.usedQuestionIds,
+        authMethod: req.authMethod || 'unknown'
+      });
+    }
+    
     if (!req.session.currentQuiz) {
       // Log additional context for debugging session issues
       const sessionInfo = {
         hasSession: !!req.session,
         hasUserId: !!req.session.userId,
         hasCurrentQuiz: !!req.session.currentQuiz,
-        authMethod: req.authMethod || 'unknown'
+        authMethod: req.authMethod || 'unknown',
+        sessionId: req.sessionID
       };
       
       if (isProduction) {
